@@ -76,14 +76,7 @@ defmodule Mesh.Actors.ActorOwner do
   end
 
   defp start_actor(actor_module, actor_id, init_arg) do
-    child_spec = %{
-      id: {actor_module, actor_id},
-      # TODO: Document this behavior
-      start: {actor_module, :start_link, [actor_id, init_arg]},
-      restart: :temporary
-    }
-
-    DynamicSupervisor.start_child(Mesh.Actors.ActorSupervisor, child_spec)
+    Mesh.Actors.ActorSupervisor.start_child(actor_module, actor_id, init_arg)
   end
 
   defp via(shard_id), do: {:via, Registry, {ActorOwnerRegistry, shard_id}}

@@ -58,15 +58,14 @@ defmodule Mesh.Supervisor do
   @impl true
   def init(_opts) do
     children = [
-      # Core tables and registries first
       Mesh.Actors.ActorTable,
       {Registry, keys: :unique, name: ActorRegistry},
       {Registry, keys: :unique, name: ActorOwnerRegistry},
-      # Cluster components that depend on registries
       Mesh.Cluster.Capabilities,
       Mesh.Cluster.Membership,
-      # Supervisors last
-      Mesh.Actors.ActorSupervisor,
+      {PartitionSupervisor,
+       child_spec: Mesh.Actors.ActorSupervisor,
+       name: Mesh.Actors.ActorSupervisor},
       Mesh.Actors.ActorOwnerSupervisor
     ]
 
