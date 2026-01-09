@@ -1,0 +1,186 @@
+# Quickstart
+
+```elixir
+Mix.install([
+  {:mesh, path: Path.join(__DIR__, "../../..")}
+])
+```
+
+## Introduction
+
+**Mesh** is a distributed virtual process system for Elixir that provides:
+
+* Location transparency - processes can live anywhere in the cluster
+* Automatic sharding - consistent hashing distributes processes across nodes
+* Capability-based routing - route processes to nodes based on capabilities
+* Simple GenServer protocol - no special behaviors required
+
+## Setup
+
+Add Mesh to your supervision tree:
+
+```elixir
+defmodule MyApp.Application do
+  use Application
+
+  def start(_type, _args) do
+    children = [
+      # Start Mesh
+      Mesh.Supervisor
+    ]
+
+    Supervisor.start_link(children, strategy: :one_for_one)
+  end
+end
+```
+
+For this quickstart, we'll start Mesh manually:
+
+```elixir
+{:ok, _pid} = Mesh.Supervisor.start_link([])
+IO.puts("✓ Mesh started")
+```
+
+## Define a Process
+
+Create a simple GenServer that will act as your virtual process. The only requirements are:
+1. Implement `start_link/1` accepting `actor_id`
+2. Handle `{:actor_call, payload}` messages
+
+```elixir
+defmodule GameActor do
+  use GenServer
+  require Logger
+
+  def start_link(actor_id) do
+    GenServer.start_link(__MODULE__, actor_id)
+  end
+
+  def init(actor_id) do
+    Logger.info("GameActor #{actor_id} started")
+    {:ok, %{id: actor_id, score: 0, level: 1}}
+  end
+
+  def handle_call({:actor_call, %{action: "increment_score"}}, _from, state) do
+    new_score = state.score + 1
+    new_state = %{state | score: new_score}
+    {:reply, {:ok, new_score}, new_state}
+  end
+
+  def handle_call({:actor_call, %{action: "level_up"}}, _from, state) do
+    new_level = state.level + 1
+    new_state = %{state | level: new_level}
+    {:reply, {:ok, new_level}, new_state}
+  end
+
+  def handle_call({:actor_call, %{action: "get_stats"}}, _from, state) do
+    {:reply, {:ok, %{score: state.score, level: state.level}}, state}
+  end
+end
+```
+
+## Register Capabilities
+
+Tell Mesh what types of processes this node can handle:
+
+```elixir
+Mesh.register_capabilities([:game])
+IO.puts("✓ Capabilities registered: [:game]")
+
+# Give it a moment to sync across nodes
+Process.sleep(100)
+```
+
+## Invoke Processes
+
+Now you can invoke processes! Mesh will automatically:
+- Create the process on first invocation
+- Route to the correct node based on consistent hashing
+- Reuse the same process instance for subsequent calls with the same `actor_id`
+
+```elixir
+# First call - process will be created
+{:ok, pid, score} = Mesh.call(%Mesh.Request{
+  module: GameActor,
+  id: "player_123",
+  payload: %{action: "increment_score"},
+  capability: :game
+})
+IO.puts("Score: #{score}, PID: #{inspect(pid)}")
+```
+
+Subsequent calls with the same `actor_id` will reuse the same process:
+
+```elixir
+# Same process instance
+{:ok, ^pid, score} = Mesh.call(%Mesh.Request{
+  module: GameActor,
+  id: "player_123",
+  payload: %{action: "increment_score"},
+  capability: :game
+})
+IO.puts("Score: #{score}, PID: #{inspect(pid)} (same PID!)")
+```
+
+Try different actions:
+
+```elixir
+{:ok, _pid, level} = Mesh.call(%Mesh.Request{
+  module: GameActor,
+  id: "player_123",
+  payload: %{action: "level_up"},
+  capability: :game
+})
+IO.puts("Level: #{level}")
+
+{:ok, _pid, stats} = Mesh.call(%Mesh.Request{
+  module: GameActor,
+  id: "player_123",
+  payload: %{action: "get_stats"},
+  capability: :game
+})
+IO.inspect(stats, label: "Stats")
+```
+
+## Multiple Processes
+
+Each unique `actor_id` creates a separate process instance:
+
+```elixir
+# Create multiple players
+for player_id <- 1..5 do
+  {:ok, _pid, score} = 
+    Mesh.call(%Mesh.Request{
+      module: GameActor,
+      id: "player_#{player_id}",
+      payload: %{action: "increment_score"},
+      capability: :game
+    })
+  IO.puts("Player #{player_id}: #{score}")
+end
+```
+
+## Sharding
+
+Mesh uses consistent hashing to determine which node owns each process:
+
+```elixir
+# Check which shard an actor belongs to
+shard = Mesh.shard_for("player_123")
+IO.puts("player_123 is on shard #{shard}")
+
+# Check which node owns a shard
+{:ok, owner_node} = Mesh.owner_node(shard, :game)
+IO.puts("Shard #{shard} is owned by: #{owner_node}")
+```
+
+## Next Steps
+
+* Learn about [Clustering](clustering.md) to distribute processes across multiple nodes
+* Explore [Implementing Processes](../advanced/processes.md) for complex stateful processes
+* See [Sharding](../advanced/sharding.md) to understand process distribution
+
+## Additional Links
+
+* [Code](https://github.com/eigr-labs/mesh)
+* [Documentation](https://hexdocs.pm/mesh)

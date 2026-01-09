@@ -1,0 +1,11 @@
+{application,mesh_example,
+             [{modules,['Elixir.MeshExample','Elixir.MeshExample.Application',
+                        'Elixir.MeshExample.CapabilityRegistrar',
+                        'Elixir.MeshExample.ChatActor',
+                        'Elixir.MeshExample.GameActor']},
+              {optional_applications,[]},
+              {applications,[kernel,stdlib,elixir,logger,mesh,libcluster]},
+              {description,"mesh_example"},
+              {registered,[]},
+              {vsn,"0.1.0"},
+              {mod,{'Elixir.MeshExample.Application',[]}}]}.
