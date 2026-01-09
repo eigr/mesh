@@ -180,10 +180,6 @@ config :libcluster,
 
 ## Performance
 
-Single-node: 16,428 process creations/s, 30,558 invocations/s, P50 latency 15-30μs
-Multi-node (4 nodes): 9,645 creations/s, ~150μs RPC latency, 99-100% balanced distribution
-Memory: ~11KB per process, tested with 85,000 concurrent processes (943MB total)
-
 Run benchmarks:
 
 ```bash
@@ -202,29 +198,3 @@ make dev           # Start IEx session
 make test          # Run tests
 make benchmark     # Run single-node benchmark
 ```
-
-Project structure:
-
-```
-lib/mesh/
-├── application.ex          # Supervisor
-├── actor_system.ex         # Public API
-├── shard_router.ex         # Hash ring routing
-├── cluster_capabilities.ex # Capability tracking
-├── actor_owner.ex          # Process manager
-└── actor_supervisor.ex     # Dynamic supervisor
-```
-
-Troubleshooting:
-
-- Processes not created: Check `Mesh.Cluster.Capabilities.nodes_for(:capability)`
-- Unbalanced distribution: Verify shard configuration across all nodes
-- High latency: Monitor network latency and ETS table size
-
-## License
-
-MIT
-
-Built by [Eigr Labs](https://github.com/eigr-labs)
-
-Inspired by Microsoft Orleans, Akka Cluster Sharding, and Dapr.
