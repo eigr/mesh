@@ -8,9 +8,7 @@ defmodule Mesh.Cluster.Membership do
 
   @impl true
   def init(_) do
-    # Schedule monitoring after a delay to allow other components to initialize
-    # Increased to 3s to handle distributed initialization where nodes connect during setup
-    Process.send_after(self(), :start_monitoring, 3000)
+    Process.send_after(self(), :start_monitoring, 100)
     {:ok, nil}
   end
 
