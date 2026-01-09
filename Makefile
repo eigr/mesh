@@ -1,13 +1,11 @@
 .PHONY: help compile clean test format lint docs benchmark benchmark-single benchmark-multi example example-node1 example-node2 deps check all
 
-# Default target
 help: ## Show this help message
 	@echo 'Usage: make [target]'
 	@echo ''
 	@echo 'Available targets:'
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-# Development targets
 deps: ## Install dependencies
 	mix deps.get
 	cd example && mix deps.get
@@ -23,14 +21,12 @@ clean: ## Clean build artifacts
 	cd example && rm -rf _build
 	cd example && rm -rf deps
 
-# Testing
 test: ## Run all tests
 	mix test
 
 test-watch: ## Run tests in watch mode
 	mix test.watch
 
-# Code quality
 format: ## Format code with mix format
 	mix format
 	cd example && mix format
@@ -55,7 +51,6 @@ dialyzer: ## Run dialyzer (requires dialyxir)
 
 check: format-check test ## Run format check and tests
 
-# Documentation
 docs: ## Generate documentation
 	mix docs
 	@echo "Documentation generated in doc/index.html"
@@ -69,7 +64,6 @@ docs-open: docs ## Generate and open documentation
 		echo "Documentation generated in doc/index.html"; \
 	fi
 
-# Benchmarks
 benchmark: benchmark-single ## Run default benchmark (single-node)
 
 benchmark-single: compile ## Run single-node benchmark
