@@ -1,7 +1,7 @@
 defmodule Mesh.Actors.ActorSupervisor do
   @moduledoc """
   DynamicSupervisor for user-defined actors.
-  
+
   Multiple instances run under PartitionSupervisor (one per scheduler)
   to reduce contention during concurrent actor creation.
   """
@@ -26,9 +26,9 @@ defmodule Mesh.Actors.ActorSupervisor do
       start: {actor_module, :start_link, [actor_id, init_arg]},
       restart: :temporary
     }
-    
+
     partition = :erlang.phash2(actor_id, System.schedulers_online())
-    
+
     DynamicSupervisor.start_child(
       {:via, PartitionSupervisor, {__MODULE__, partition}},
       spec

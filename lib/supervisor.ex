@@ -64,8 +64,7 @@ defmodule Mesh.Supervisor do
       Mesh.Cluster.Capabilities,
       Mesh.Cluster.Membership,
       {PartitionSupervisor,
-       child_spec: Mesh.Actors.ActorSupervisor,
-       name: Mesh.Actors.ActorSupervisor},
+       child_spec: Mesh.Actors.ActorSupervisor, name: Mesh.Actors.ActorSupervisor},
       Mesh.Actors.ActorOwnerSupervisor
     ]
 
