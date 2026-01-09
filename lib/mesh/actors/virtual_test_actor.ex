@@ -31,7 +31,7 @@ defmodule Mesh.Actors.VirtualTestActor do
   use GenServer
   require Logger
 
-  def start_link(actor_name) do
+  def start_link(actor_name, _initial_state \\ nil) do
     GenServer.start_link(__MODULE__, actor_name)
   end
 

@@ -85,6 +85,11 @@ benchmark-multi: compile ## Run multi-node benchmark (requires distributed mode)
 	@echo "Note: This requires Erlang distribution to be enabled"
 	elixir --name bench@127.0.0.1 --cookie mvp -S mix run scripts/benchmark_multinode.exs
 
+benchmark-balanced: compile ## Run balanced multi-node benchmark (1 capability per node)
+	@echo "Running balanced multi-node benchmark..."
+	@echo "Note: This requires Erlang distribution to be enabled"
+	elixir --name bench@127.0.0.1 --cookie mvp -S mix run scripts/benchmark_multinode_balanced.exs
+
 test-distributed: compile ## Test distributed mode manually (see scripts/test_distributed.exs)
 	@cat scripts/test_distributed.exs
 	@echo ""

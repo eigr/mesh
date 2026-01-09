@@ -8,23 +8,23 @@ end
 
 Logger.configure(level: :warning)
 
-IO.puts("\n🎯 Starting Benchee Benchmarks for Mesh\n")
+IO.puts("\nStarting Benchee Benchmarks for Mesh\n")
 
 :ets.delete_all_objects(Mesh.Actors.ActorTable)
-IO.puts("✅ Actor table cleaned\n")
+IO.puts("Actor table cleaned\n")
 
 require Mesh.Cluster.Capabilities
 Mesh.Cluster.Capabilities.register_capabilities([:game, :chat, :payment])
-IO.puts("✅ Capabilities registered: [:game, :chat, :payment]\n")
+IO.puts("Capabilities registered: [:game, :chat, :payment]\n")
 
 actor_counts = [100, 1_000, 5_000]
 
-IO.puts("📋 Configuration:")
+IO.puts("Configuration:")
 IO.puts("   Node: #{node()}")
 IO.puts("   Actor counts to test: #{inspect(actor_counts)}")
 IO.puts("")
 
-IO.puts("📊 Benchmark 1: Actor Creation Performance\n")
+IO.puts("Benchmark 1: Actor Creation Performance\n")
 
 Benchee.run(
   %{
@@ -54,14 +54,14 @@ Benchee.run(
 
 IO.puts("\n" <> String.duplicate("=", 80) <> "\n")
 
-IO.puts("📊 Benchmark 2: Actor Invocation Performance\n")
+IO.puts("Benchmark 2: Actor Invocation Performance\n")
 
 IO.puts("Setting up actors for invocation test...")
 Enum.each(1..1_000, fn i ->
   Mesh.call(req.(Mesh.Actors.VirtualTestActor, "bench_invoke_#{i}", %{init: true}, :game))
 end)
 Process.sleep(500)
-IO.puts("✅ Setup complete\n")
+IO.puts("Setup complete\n")
 
 Benchee.run(
   %{
@@ -100,7 +100,7 @@ Benchee.run(
 
 IO.puts("\n" <> String.duplicate("=", 80) <> "\n")
 
-IO.puts("📊 Benchmark 3: Multi-Capability Performance\n")
+IO.puts("Benchmark 3: Multi-Capability Performance\n")
 
 Benchee.run(
   %{
@@ -136,7 +136,7 @@ Benchee.run(
 
 IO.puts("\n" <> String.duplicate("=", 80) <> "\n")
 
-IO.puts("📊 Benchmark 4: Hot Spot Contention (Same Actor)\n")
+IO.puts("Benchmark 4: Hot Spot Contention (Same Actor)\n")
 
 Mesh.call(req.(Mesh.Actors.VirtualTestActor, "hot_actor", %{init: true}, :game))
 Process.sleep(100)
@@ -186,7 +186,7 @@ Benchee.run(
 
 IO.puts("\n" <> String.duplicate("=", 80) <> "\n")
 
-IO.puts("📊 Benchmark 5: Hash Ring Distribution Pattern\n")
+IO.puts("Benchmark 5: Hash Ring Distribution Pattern\n")
 
 Benchee.run(
   %{
@@ -226,7 +226,7 @@ Benchee.run(
 
 IO.puts("\n" <> String.duplicate("=", 80) <> "\n")
 
-IO.puts("📈 Final System Statistics:\n")
+IO.puts("Final System Statistics:\n")
 
 total_actors = :ets.info(Mesh.Actors.ActorTable, :size)
 total_processes = :erlang.system_info(:process_count)
@@ -239,4 +239,4 @@ IO.puts("   Processes memory: #{Float.round(memory[:processes] / 1_048_576, 2)} 
 IO.puts("   ETS memory: #{Float.round(memory[:ets] / 1_048_576, 2)} MB")
 IO.puts("   Memory per actor: #{if total_actors > 0, do: Float.round(memory[:total] / total_actors / 1024, 2), else: 0} KB")
 
-IO.puts("\n✅ Benchee Benchmarks completed!\n")
+IO.puts("\nBenchee Benchmarks completed!\n")

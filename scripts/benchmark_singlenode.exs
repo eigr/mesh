@@ -1,23 +1,21 @@
-IO.puts("\n🚀 Starting Mesh STRESS Benchmarks\n")
+IO.puts("\nStarting Mesh STRESS Benchmarks\n")
 
 # Helper for creating requests
 req = fn module, id, payload, capability ->
   %Mesh.Request{module: module, id: id, payload: payload, capability: capability}
 end
 
-# Start Mesh supervisor (no cluster setup needed for single node)
 {:ok, _pid} = Mesh.Supervisor.start_link()
 Process.sleep(100)
 
 Mesh.register_capabilities([:game, :chat, :payment])
 
-# Wait for async shard synchronization
 Process.sleep(300)
 
-IO.puts("✅ Capabilities registered: [:game, :chat, :payment]")
-IO.puts("✅ System synchronized\n")
+IO.puts("Capabilities registered: [:game, :chat, :payment]")
+IO.puts("System synchronized\n")
 
-IO.puts("📊 Benchmark 1: Creating 50,000 actors")
+IO.puts("Benchmark 1: Creating 50,000 actors")
 
 {time_us, results} =
   :timer.tc(fn ->
@@ -39,7 +37,7 @@ IO.puts("   Time: #{Float.round(time_us / 1_000_000, 2)}s")
 IO.puts("   Throughput: #{Float.round(50_000 / (time_us / 1_000_000), 2)} actors/s")
 IO.puts("   Success: #{successes} | Failures: #{failures}\n")
 
-IO.puts("📊 Benchmark 2: 10,000 invocations on the same actor (contention test)")
+IO.puts("Benchmark 2: 10,000 invocations on the same actor (contention test)")
 
 {:ok, _pid, _reply} = Mesh.call(req.(Mesh.Actors.VirtualTestActor, "hot_actor", %{init: true}, :game))
 
@@ -62,7 +60,7 @@ IO.puts("   Time: #{Float.round(time_us / 1_000_000, 2)}s")
 IO.puts("   Throughput: #{Float.round(10_000 / (time_us / 1_000_000), 2)} req/s")
 IO.puts("   Success: #{successes}/10000\n")
 
-IO.puts("📊 Benchmark 3: Shard distribution for 100,000 actors")
+IO.puts("Benchmark 3: Shard distribution for 100,000 actors")
 
 shard_distribution =
   1..100_000
@@ -79,7 +77,7 @@ IO.puts("   Max actors/shard: #{max_per_shard}")
 IO.puts("   Min actors/shard: #{min_per_shard}")
 IO.puts("   Avg actors/shard: #{Float.round(avg_per_shard, 2)}\n")
 
-IO.puts("📊 Benchmark 4: 30,000 actors with 3 different capabilities")
+IO.puts("Benchmark 4: 30,000 actors with 3 different capabilities")
 
 {time_us, results} =
   :timer.tc(fn ->
@@ -103,7 +101,7 @@ IO.puts("   Time: #{Float.round(time_us / 1_000_000, 2)}s")
 IO.puts("   Throughput: #{Float.round(30_000 / (time_us / 1_000_000), 2)} actors/s")
 IO.puts("   Success: #{successes}/30000\n")
 
-IO.puts("📊 Benchmark 5: Mixed load - 20,000 invocations on 5,000 actors")
+IO.puts("Benchmark 5: Mixed load - 20,000 invocations on 5,000 actors")
 
 IO.puts("   Creating 5,000 actors...")
 
@@ -144,7 +142,7 @@ IO.puts("   Time: #{Float.round(time_us / 1_000_000, 2)}s")
 IO.puts("   Throughput: #{Float.round(20_000 / (time_us / 1_000_000), 2)} req/s")
 IO.puts("   Success: #{successes}/20000\n")
 
-IO.puts("📊 Benchmark 6: Latency measurement under load")
+IO.puts("Benchmark 6: Latency measurement under load")
 
 latencies =
   1..1_000
@@ -171,7 +169,7 @@ IO.puts("   P95: #{p95}μs (#{Float.round(p95 / 1000, 2)}ms)")
 IO.puts("   P99: #{p99}μs (#{Float.round(p99 / 1000, 2)}ms)")
 IO.puts("   Max: #{max}μs (#{Float.round(max / 1000, 2)}ms)\n")
 
-IO.puts("📈 Final System Statistics:")
+IO.puts("Final System Statistics:")
 
 memory = :erlang.memory()
 processes = :erlang.system_info(:process_count)
@@ -184,8 +182,8 @@ IO.puts("   Process memory: #{Float.round(memory[:processes] / (1024 * 1024), 2)
 IO.puts("   ETS memory: #{Float.round(memory[:ets] / (1024 * 1024), 2)} MB")
 IO.puts("   Memory per actor: #{Float.round(memory[:total] / actors_in_table / 1024, 2)} KB")
 
-IO.puts("\n⚠️  Limit Test:")
+IO.puts("\nLimit Test:")
 IO.puts("   Process limit: #{:erlang.system_info(:process_limit)}")
 IO.puts("   Process usage: #{Float.round(processes / :erlang.system_info(:process_limit) * 100, 2)}%")
 
-IO.puts("\n✅ Stress Benchmarks completed!\n")
+IO.puts("\nStress Benchmarks completed!\n")

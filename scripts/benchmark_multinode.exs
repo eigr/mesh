@@ -2,23 +2,18 @@ Code.require_file("test/support/node_helper.ex")
 
 # Check if the node is distributed
 unless Node.alive?() do
-  IO.puts("\n❌ ERROR: This benchmark needs to be executed in distributed mode!\n")
+  IO.puts("\nERROR: This benchmark needs to be executed in distributed mode!\n")
   IO.puts("Run with:")
   IO.puts("  elixir --name bench@127.0.0.1 --cookie mvp -S mix run scripts/benchmark_multinode.exs\n")
   System.halt(1)
 end
 
-IO.puts("\n🌐 Starting MULTI-NODE Benchmark of Mesh\n")
+IO.puts("\nStarting MULTI-NODE Benchmark of Mesh\n")
 
-# Helper for creating requests
 req = fn module, id, payload, capability ->
   %Mesh.Request{module: module, id: id, payload: payload, capability: capability}
 end
 
-# Note: Not using libcluster here - NodeHelper will connect nodes manually
-# This avoids premature connections during initialization
-
-# Start Mesh supervisor on main node
 {:ok, _pid} = Mesh.Supervisor.start_link()
 
 # Wait for Mesh.Supervisor to fully initialize before starting slave nodes
@@ -28,20 +23,20 @@ Process.sleep(2000)
 
 node_count = 3
 
-IO.puts("📋 Configuration:")
+IO.puts("Configuration:")
 IO.puts("   Total nodes: #{node_count + 1} (1 main + #{node_count} slaves)")
 IO.puts("   Main node: #{node()}")
 IO.puts("")
 
-IO.puts("🚀 Starting #{node_count} slave nodes...")
+IO.puts("Starting #{node_count} slave nodes...")
 
 nodes = NodeHelper.start_nodes(node_count, "bench_node")
 
 all_nodes = [node() | nodes]
 
-IO.puts("✅ Nodes started: #{inspect(all_nodes)}\n")
+IO.puts("Nodes started: #{inspect(all_nodes)}\n")
 
-IO.puts("🔧 Registering capabilities per node...")
+IO.puts("Registering capabilities per node...")
 
 NodeHelper.register_capabilities(node(), [:game])
 IO.puts("   #{node()} → [:game]")
@@ -63,12 +58,12 @@ end
 
 IO.puts("")
 
-IO.puts("🔄 Synchronizing shards on all nodes...")
+IO.puts("Synchronizing shards on all nodes...")
 NodeHelper.sync_all_shards(nodes)
 Process.sleep(500)
-IO.puts("✅ Shards synchronized\n")
+IO.puts("Shards synchronized\n")
 
-IO.puts("📊 Initial Statistics:")
+IO.puts("Initial Statistics:")
 
 Enum.each(all_nodes, fn node ->
   stats = NodeHelper.node_stats(node)
@@ -159,14 +154,14 @@ IO.puts("")
 # IO.puts("   Average latency (remote): #{Float.round(avg_remote, 2)}μs (#{Float.round(avg_remote / 1000, 2)}ms)")
 # IO.puts("   RPC overhead: #{Float.round((avg_remote - avg_local) / avg_local * 100, 2)}%\n")
 
-IO.puts("📊 Benchmark 3: 15,000 invocations distributed across nodes")
+IO.puts("Benchmark 3: 15,000 invocations distributed across nodes")
 
 # ==============================================================================
 # BENCHMARK 4: RESILIENCE TEST - COMMENTED OUT FOR DEBUGGING
 # This test kills and restarts nodes. Commenting out to isolate issues.
 # ==============================================================================
 # if length(nodes) >= 2 do
-#   IO.puts("📊 Benchmark 4: Resilience - Simulating node failure")
+#   IO.puts("Benchmark 4: Resilience - Simulating node failure")
 #
 #   node_to_kill = Enum.at(nodes, 1)
 #   IO.puts("   Killing node: #{node_to_kill}")
@@ -205,7 +200,7 @@ IO.puts("📊 Benchmark 3: 15,000 invocations distributed across nodes")
 #   NodeHelper.sync_all_shards([new_node | nodes -- [node_to_kill]])
 #   Process.sleep(500)
 #
-#   IO.puts("   ✅ Node recovered\n")
+#   IO.puts("   Node recovered\n")
 # end
 
 IO.puts("   Throughput: #{Float.round(15_000 / (time_us / 1_000_000), 2)} req/s")
@@ -257,7 +252,7 @@ IO.puts("   Success: #{successes}/15000\n")
 #   IO.puts("   ✅ Node recovered\n")
 # end
 
-IO.puts("📊 Benchmark 5: Hash ring balancing verification")
+IO.puts("Benchmark 5: Hash ring balancing verification")
 
 sample_actors = 10_000
 
@@ -287,19 +282,14 @@ variance = Enum.sum(Enum.map(distribution, fn {_, count} -> :math.pow(count - me
 std_dev = :math.sqrt(variance)
 
 IO.puts("   Standard deviation: #{Float.round(std_dev, 2)}")
-IO.puts("   Balancing: #{if std_dev < mean * 0.15, do: "✅ Excellent", else: "⚠️  Check"}\n")
-
-# ==============================================================================
-# FINAL STATISTICS
-# ==============================================================================
-
+IO.puts("   Balancing: #{if std_dev < mean * 0.15, do: "Excellent", else: "Check"}\n")
 IO.puts("📈 Final Cluster Statistics:")
 
 Enum.each(all_nodes, fn node ->
   stats = NodeHelper.node_stats(node)
 
   IO.puts("\n   #{node}:")
-  IO.puts("     Status: #{if stats.alive, do: "✅ Online", else: "❌ Offline"}")
+  IO.puts("     Status: #{if stats.alive, do: "Online", else: "Offline"}")
 
   if stats.alive do
     IO.puts("     Processes: #{stats.processes}")
@@ -320,12 +310,12 @@ total_actors =
   end)
   |> Enum.sum()
 
-IO.puts("\n   Total actors in cluster: #{total_actors}")
+IO.puts("\notal actors in cluster: #{total_actors}")
 
-IO.puts("\n🧹 Cleaning up slave nodes...")
+IO.puts("\nCleaning up slave nodes...")
 NodeHelper.stop_nodes(nodes)
 
-IO.puts("\n✅ Multi-Node Benchmark completed!\n")
+IO.puts("\nMulti-Node Benchmark completed!\n")
 #
 # sample_actors = 10_000
 #
@@ -355,7 +345,7 @@ IO.puts("\n✅ Multi-Node Benchmark completed!\n")
 # std_dev = :math.sqrt(variance)
 #
 # IO.puts("   Standard deviation: #{Float.round(std_dev, 2)}")
-# IO.puts("   Balancing: #{if std_dev < mean * 0.15, do: "✅ Excellent", else: "⚠️  Check"}\n")
+# IO.puts("   Balancing: #{if std_dev < mean * 0.15, do: "Excellent", else: "Check"}\n")
 #
 # # ==============================================================================
 # # FINAL STATISTICS
@@ -367,7 +357,7 @@ IO.puts("\n✅ Multi-Node Benchmark completed!\n")
 #   stats = NodeHelper.node_stats(node)
 #
 #   IO.puts("\n   #{node}:")
-#   IO.puts("     Status: #{if stats.alive, do: "✅ Online", else: "❌ Offline"}")
+#   IO.puts("     Status: #{if stats.alive, do: "Online", else: "Offline"}")
 #
 #   if stats.alive do
 #     IO.puts("     Processes: #{stats.processes}")
@@ -384,7 +374,7 @@ IO.puts("\n✅ Multi-Node Benchmark completed!\n")
 #
 # IO.puts("\n   Total actors in cluster: #{total_actors}")
 
-IO.puts("\n🧹 Cleaning up slave nodes...")
+IO.puts("\nCleaning up slave nodes...")
 NodeHelper.stop_nodes(nodes)
 
-IO.puts("\n✅ Multi-Node Benchmark completed!\n")
+IO.puts("\nMulti-Node Benchmark completed!\n")
