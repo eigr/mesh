@@ -71,6 +71,8 @@ Mesh.register_capabilities([:counter])
 - Mesh sends your payload directly via `GenServer.cast(pid, payload)`
 - Returns `:ok` immediately without waiting for a response
 
+>__NOTE__: Mesh uses **eventual consistency** for process placement. Shards are routing mechanisms only - they do not guarantee state consistency across the cluster. Each process is responsible for managing its own state. During network splits or topology changes, the same process ID may temporarily exist on multiple nodes until convergence.
+
 ## Custom Initialization
 
 You can pass custom arguments to your process when it's first created:

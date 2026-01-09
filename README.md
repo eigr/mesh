@@ -2,7 +2,7 @@
 
 Capability-based distributed process management for Elixir.
 
-Mesh distributes GenServer processes across BEAM nodes using consistent hashing and capability-based routing. Processes are lazily activated on-demand and automatically placed on the correct node based on their ID and capability type.
+Mesh distributes GenServer processes across BEAM nodes using hashing and capability-based routing. Processes are lazily activated on-demand and automatically placed on the correct node based on their ID and capability type.
 
 ## What is Mesh?
 
@@ -26,13 +26,15 @@ Capabilities are labels that identify what type of processes a node handles. Exa
 Mesh.register_capabilities([:game, :chat])
 ```
 
-The hash ring uses consistent hashing with 4096 shards to distribute processes:
+The hash ring uses hashing with 4096 shards to distribute processes:
 
 ```
 process_id → hash(process_id) → shard (0..4095) → owner_node
 ```
 
 Same ID always maps to the same shard. Shards are distributed round-robin across nodes supporting the capability. When topology changes, only affected shards remap.
+
+>__NOTE__: Mesh uses **eventual consistency** for process placement. Shards are used purely for routing decisions - they do not provide state guarantees or transactions. Each process manages its own state independently. During network partitions or topology changes, the same process ID may temporarily exist on multiple nodes until the system converges.
 
 Processes are created lazily on first invocation. When you call a non-existent process, Mesh:
 1. Determines target node via hash ring

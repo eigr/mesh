@@ -2,7 +2,8 @@
 
 ```elixir
 Mix.install([
-  {:mesh, path: Path.join(__DIR__, "../../..")}
+  {:mesh, "~> 0.1.1"},
+  {:libcluster, "~> 3.3"} # optional
 ])
 ```
 
@@ -173,6 +174,8 @@ IO.puts("player_123 is on shard #{shard}")
 {:ok, owner_node} = Mesh.owner_node(shard, :game)
 IO.puts("Shard #{shard} is owned by: #{owner_node}")
 ```
+
+__NOTE__: Mesh uses **eventual consistency** for process placement. Shards are used purely for routing decisions - they do not provide state guarantees or transactions. Each process manages its own state independently. During network partitions or topology changes, the same process ID may temporarily exist on multiple nodes until the system converges.
 
 ## Next Steps
 
