@@ -1,7 +1,8 @@
-ExUnit.start()
+ExUnit.start(exclude: [:stress, :destructive])
 
-# Start Mesh supervisor for testing (no cluster needed for unit tests)
 {:ok, _} = Mesh.Supervisor.start_link()
 
-# Wait for system to initialize
+Mesh.Cluster.Capabilities.register_capabilities([:test, :custom, :game, :logging])
+Mesh.Actors.ActorOwnerSupervisor.sync_shards()
+
 Process.sleep(500)

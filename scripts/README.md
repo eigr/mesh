@@ -22,7 +22,7 @@ mix run scripts/benchmark.exs
 ### 2. `benchmark_multinode.exs` - Multi-Node Benchmark
 Tests distributed performance with multiple Erlang nodes.
 
-**⚠️ IMPORTANT:** This benchmark needs to be executed in distributed mode:
+>__NOTE__ This benchmark needs to be executed in distributed mode:
 
 ```bash
 elixir --name bench@127.0.0.1 --cookie mvp -S mix run scripts/benchmark_multinode.exs
@@ -106,6 +106,3 @@ After complete initialization, the system works perfectly without errors.
 - Balanced distribution across nodes
 - Success rate: >99%
 
-## Support
-
-For more information about the architecture, see the source code in `lib/mesh/`.

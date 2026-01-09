@@ -23,17 +23,21 @@ defmodule Mesh.Actors.ActorOwner do
   def handle_call({:call, actor_id, payload, actor_module, init_arg}, _from, state) do
     case Mesh.Actors.ActorTable.get(actor_id) do
       {:ok, pid, _node} ->
-        reply = GenServer.call(pid, {:actor_call, payload})
+        reply = GenServer.call(pid, payload)
         {:reply, {:ok, pid, reply}, state}
 
       :not_found ->
-        {:ok, pid} = start_actor(actor_module, actor_id, init_arg)
+        case start_actor(actor_module, actor_id, init_arg) do
+          {:ok, pid} ->
+            ref = Process.monitor(pid)
+            Mesh.Actors.ActorTable.put(actor_id, pid, node())
 
-        ref = Process.monitor(pid)
-        Mesh.Actors.ActorTable.put(actor_id, pid, node())
+            reply = GenServer.call(pid, payload)
+            {:reply, {:ok, pid, reply}, put_in(state.monitors[ref], actor_id)}
 
-        reply = GenServer.call(pid, {:actor_call, payload})
-        {:reply, {:ok, pid, reply}, put_in(state.monitors[ref], actor_id)}
+          {:error, reason} ->
+            {:reply, {:error, reason}, state}
+        end
     end
   end
 
@@ -41,17 +45,21 @@ defmodule Mesh.Actors.ActorOwner do
   def handle_call({:cast, actor_id, payload, actor_module, init_arg}, _from, state) do
     case Mesh.Actors.ActorTable.get(actor_id) do
       {:ok, pid, _node} ->
-        GenServer.cast(pid, {:actor_cast, payload})
+        GenServer.cast(pid, payload)
         {:reply, :ok, state}
 
       :not_found ->
-        {:ok, pid} = start_actor(actor_module, actor_id, init_arg)
+        case start_actor(actor_module, actor_id, init_arg) do
+          {:ok, pid} ->
+            ref = Process.monitor(pid)
+            Mesh.Actors.ActorTable.put(actor_id, pid, node())
 
-        ref = Process.monitor(pid)
-        Mesh.Actors.ActorTable.put(actor_id, pid, node())
+            GenServer.cast(pid, payload)
+            {:reply, :ok, put_in(state.monitors[ref], actor_id)}
 
-        GenServer.cast(pid, {:actor_cast, payload})
-        {:reply, :ok, put_in(state.monitors[ref], actor_id)}
+          {:error, reason} ->
+            {:reply, {:error, reason}, state}
+        end
     end
   end
 

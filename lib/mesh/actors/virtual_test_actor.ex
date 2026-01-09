@@ -22,7 +22,7 @@ defmodule Mesh.Actors.VirtualTestActor do
         end
 
         @impl true
-        def handle_call({:actor_call, payload}, _from, state) do
+        def handle_call(payload, _from, state) do
           # Your custom logic here
           {:reply, {:ok, :processed}, state}
         end
@@ -41,7 +41,7 @@ defmodule Mesh.Actors.VirtualTestActor do
   end
 
   @impl true
-  def handle_call({:actor_call, payload}, _from, state) do
+  def handle_call(payload, _from, state) do
     Logger.info("Actor #{state} received payload: #{inspect(payload)}")
     {:reply, payload, state}
   end

@@ -6,9 +6,9 @@ This guide explains how to implement processes for Mesh and how they work within
 
 Mesh expects a simple GenServer that follows these conventions:
 
-1. **Implement `start_link/1`** - Receives the `actor_id` as parameter
-2. **Handle `{:actor_call, payload}`** - Process calls via `handle_call/3`
-3. **Return `{:reply, result, state}`** - Standard GenServer response
+1. Implement `start_link/1` - Receives the `actor_id` as parameter
+2. Handle messages via `handle_call/3` with your own pattern matching
+3. Return `{:reply, result, state}` - Standard GenServer response
 
 That's it. No behaviors, no macros, just a GenServer.
 
@@ -27,8 +27,8 @@ defmodule MyApp.Counter do
     {:ok, %{id: actor_id, count: 0}}
   end
 
-  # Required: handle {:actor_call, payload}
-  def handle_call({:actor_call, payload}, _from, state) do
+  # Handle any message pattern you want
+  def handle_call(payload, _from, state) do
     new_count = state.count + 1
     {:reply, {:ok, new_count}, %{state | count: new_count}}
   end
@@ -63,12 +63,12 @@ Mesh.register_capabilities([:counter])
 **What happens on `call`:**
 - Mesh determines which node should own this process based on `"counter_1"` and `:counter` capability
 - If the process doesn't exist, Mesh starts it using `MyApp.Counter.start_link("counter_1")`
-- Mesh sends the message `{:actor_call, %{}}` via `GenServer.call`
+- Mesh sends your payload directly via `GenServer.call(pid, payload)`
 - Returns `{:ok, pid, result}` where `pid` is the process identifier and `result` is what your `handle_call` returned
 
 **What happens on `cast`:**
 - Same routing logic as `call`
-- Mesh sends the message `{:actor_cast, payload}` via `GenServer.cast`
+- Mesh sends your payload directly via `GenServer.cast(pid, payload)`
 - Returns `:ok` immediately without waiting for a response
 
 ## Custom Initialization
@@ -96,7 +96,7 @@ defmodule MyApp.GameActor do
     {:ok, %{id: actor_id, level: init_arg.starting_level, score: 0}}
   end
 
-  def handle_call({:actor_call, _payload}, _from, state) do
+  def handle_call(_payload, _from, state) do
     {:reply, {:ok, state}, state}
   end
 end
@@ -179,12 +179,12 @@ defmodule MyApp.Crasher do
     {:ok, %{id: actor_id, crashes: 0}}
   end
 
-  def handle_call({:actor_call, %{action: "crash"}}, _from, state) do
+  def handle_call(%{action: "crash"}, _from, state) do
     # This will crash the process
     raise "boom!"
   end
 
-  def handle_call({:actor_call, _payload}, _from, state) do
+  def handle_call(_payload, _from, state) do
     {:reply, {:ok, state.crashes}, state}
   end
 end
@@ -230,96 +230,20 @@ pid1 != pid2  # true
 
 ## Architecture
 
-Here's how your process fits into Mesh:
+Understanding how Mesh routes and manages processes:
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│ Mesh.call(%Mesh.Request{module: M, id: "id_123", ...})        │
-└────────────────────┬────────────────────────────────────┘
-                     │
-                     ▼
-        ┌────────────────────────┐
-        │ Mesh.Actors.ActorSystem│ (Routes the call)
-        └────────┬───────────────┘
-                 │
-                 ├─► Check shard: hash("id_123") → shard_number
-                 │
-                 ├─► Find owner node for shard + capability
-                 │
-                 └─► If this node, continue. If remote, forward.
-                     │
-                     ▼
-        ┌────────────────────────┐
-        │ Mesh.Actors.ActorOwner │ (Manages processes per shard)
-        └────────┬───────────────┘
-                 │
-                 ├─► Lookup PID in ETS (fast!)
-                 │   Found? → Call the process
-                 │   Not found? ↓
-                 │
-                 ├─► Start process: MyModule.start_link("id_123")
-                 │   under DynamicSupervisor
-                 │
-                 ├─► Cache PID in ETS
-                 │
-                 └─► GenServer.call(pid, {:actor_call, payload})
-                     │
-                     ▼
-        ┌────────────────────────┐
-        │   YOUR GenServer       │
-        │   MyModule             │
-        │                        │
-        │ handle_call(           │
-        │   {:actor_call, ...},  │
-        │   _from,               │
-        │   state                │
-        │ )                      │
-        └────────────────────────┘
-```
+When you invoke a process via `Mesh.call`, the system executes a multi-step pipeline to ensure the process exists on the correct node and receives your message.
 
-## Pattern Matching on Payload
+The routing layer first computes a shard number by hashing the process ID. With 4096 shards distributed across available nodes, the hash ring determines which node should own this particular process. This deterministic approach ensures the same ID always routes to the same node unless the cluster topology changes.
 
-Use pattern matching to handle different actions:
+Once the target node is identified, Mesh checks if this is a local or remote call. For local calls, it proceeds directly to the owner. For remote calls, it uses RPC to invoke the owner on the target node.
 
-```elixir
-defmodule MyApp.GameActor do
-  use GenServer
+The owner component manages all processes for its assigned shards. It maintains an ETS table for fast PID lookups. When a call arrives, it first checks if the process already exists in the table. If found, the message is forwarded immediately. If not found, the owner starts a new process under its DynamicSupervisor, caches the PID in ETS, and then forwards the message.
 
-  def start_link(actor_id) do
-    GenServer.start_link(__MODULE__, actor_id)
-  end
+Finally, your GenServer receives your payload directly via `handle_call/3`. You have complete freedom to pattern match on the payload structure. You process the business logic and return a response, which flows back through the owner, potentially through RPC, and returns to the original caller.
 
-  def init(actor_id) do
-    {:ok, %{id: actor_id, score: 0, level: 1}}
-  end
+This architecture provides several benefits: processes are evenly distributed across nodes via consistent hashing, PID caching eliminates repeated lookups, dynamic supervision handles failures automatically, and the entire system operates without coordination overhead between nodes.
 
-  # Different actions via pattern matching
-  def handle_call({:actor_call, %{action: :increment}}, _from, state) do
-    new_state = %{state | score: state.score + 1}
-    {:reply, {:ok, new_state.score}, new_state}
-  end
-
-  def handle_call({:actor_call, %{action: :level_up}}, _from, state) do
-    new_state = %{state | level: state.level + 1}
-    {:reply, {:ok, new_state.level}, new_state}
-  end
-
-  def handle_call({:actor_call, %{action: :get_state}}, _from, state) do
-    {:reply, {:ok, state}, state}
-  end
-
-  # Catch-all for unknown actions
-  def handle_call({:actor_call, _unknown}, _from, state) do
-    {:reply, {:error, :unknown_action}, state}
-  end
-
-  # Support async operations via cast
-  def handle_cast({:actor_cast, %{action: :log}}, state) do
-    IO.puts("GameActor #{state.id}: score=#{state.score}, level=#{state.level}")
-    {:noreply, state}
-  end
-end
-```
 
 ## Key Takeaways
 

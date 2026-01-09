@@ -1,4 +1,4 @@
-defmodule NewAPITest do
+defmodule MeshIntegrationTest do
   use ExUnit.Case
 
   setup do
@@ -25,16 +25,16 @@ defmodule NewAPITest do
       {:ok, %{id: actor_id, level: init_arg.starting_level, score: 0}}
     end
 
-    def handle_call({:actor_call, %{action: :get_state}}, _from, state) do
+    def handle_call(%{action: :get_state}, _from, state) do
       {:reply, state, state}
     end
 
-    def handle_call({:actor_call, %{action: :increment}}, _from, state) do
+    def handle_call(%{action: :increment}, _from, state) do
       new_state = %{state | score: state.score + 1}
       {:reply, new_state.score, new_state}
     end
 
-    def handle_cast({:actor_cast, %{action: :log}}, state) do
+    def handle_cast(%{action: :log}, state) do
       IO.puts("GameActor #{state.id}: score is #{state.score}")
       {:noreply, state}
     end

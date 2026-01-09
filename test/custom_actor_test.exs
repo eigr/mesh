@@ -5,7 +5,7 @@ defmodule CustomActorTest do
     @moduledoc "Test actor for validation"
     use GenServer
 
-    def start_link(actor_id) do
+    def start_link(actor_id, _init_arg \\ nil) do
       GenServer.start_link(__MODULE__, actor_id)
     end
 
@@ -15,12 +15,12 @@ defmodule CustomActorTest do
     end
 
     @impl true
-    def handle_call({:actor_call, %{action: "increment"}}, _from, state) do
+    def handle_call(%{action: "increment"}, _from, state) do
       new_state = %{state | counter: state.counter + 1}
       {:reply, %{counter: new_state.counter}, new_state}
     end
 
-    def handle_call({:actor_call, %{action: "get_counter"}}, _from, state) do
+    def handle_call(%{action: "get_counter"}, _from, state) do
       {:reply, %{counter: state.counter}, state}
     end
   end
