@@ -67,15 +67,10 @@ defmodule Mesh.Actors.ActorOwner do
     end
   end
 
-  defp start_actor(actor_module, actor_id, nil) do
-    # Legacy path: call start_link/1
-    DynamicSupervisor.start_child(Mesh.Actors.ActorSupervisor, {actor_module, actor_id})
-  end
-
   defp start_actor(actor_module, actor_id, init_arg) do
-    # New path: call start_link/2 with custom init_arg
     child_spec = %{
       id: {actor_module, actor_id},
+      # TODO: Document this behavior
       start: {actor_module, :start_link, [actor_id, init_arg]},
       restart: :temporary
     }

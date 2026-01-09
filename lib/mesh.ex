@@ -10,9 +10,9 @@ defmodule Mesh do
 
   Mesh uses a three-layer architecture:
 
-  1. **Hash Ring**: Computes shard (0..4095) from actor ID using `:erlang.phash2/2`
-  2. **Capability Routing**: Determines which nodes support a given capability
-  3. **Actor Placement**: Routes actors to owner nodes via RPC
+  1. Hash Ring: Computes shard (0..4095) from actor ID using `:erlang.phash2/2`
+  2. Capability Routing: Determines which nodes support a given capability
+  3. Actor Placement: Routes actors to owner nodes via RPC
 
   ## Quick Start
 
@@ -70,10 +70,6 @@ defmodule Mesh do
 
   @typedoc "List of capability atoms"
   @type capabilities :: [capability()]
-
-  # ============================================================================
-  # Actor Invocation
-  # ============================================================================
 
   @doc """
   Synchronously calls a virtual process with the given request.
@@ -156,10 +152,6 @@ defmodule Mesh do
   def cast(%Mesh.Request{} = request) do
     Mesh.Actors.ActorSystem.cast(request)
   end
-
-  # ============================================================================
-  # Capability Management
-  # ============================================================================
 
   @doc """
   Registers capabilities that this node supports.
@@ -258,10 +250,6 @@ defmodule Mesh do
   """
   @spec all_capabilities() :: capabilities()
   defdelegate all_capabilities(), to: Mesh.Cluster.Capabilities
-
-  # ============================================================================
-  # Routing Utilities
-  # ============================================================================
 
   @doc """
   Computes the shard number for a given actor ID.
