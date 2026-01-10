@@ -20,9 +20,9 @@ defmodule Mesh.Actors.ActorSupervisor do
   Starts an actor under the partitioned supervisor.
   Routes to appropriate partition based on actor_id hash.
   """
-  def start_child(actor_module, actor_id, init_arg) do
+  def start_child(actor_module, actor_id, capability, init_arg) do
     spec = %{
-      id: {actor_module, actor_id},
+      id: {actor_module, capability, actor_id},
       start: {actor_module, :start_link, [actor_id, init_arg]},
       restart: :temporary
     }

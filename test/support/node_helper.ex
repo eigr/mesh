@@ -1,22 +1,22 @@
 defmodule NodeHelper do
   @moduledoc """
   Helper for creating and managing distributed Erlang nodes for tests.
-  Based on Spawn project pattern.
+  Uses the :peer module (OTP 25+) for spawning distributed nodes.
   """
 
   require Logger
+
+  # Store peer PIDs for cleanup
+  @peer_table :node_helper_peers
+  @peer_owner :node_helper_peers_owner
 
   @doc """
   Spawns a peer node and loads the application.
   Returns the node name.
   """
   def spawn_peer(node_name, options \\ []) do
-    # Ensure we're distributed
-    :net_kernel.start([:"primary@127.0.0.1"])
-
-    # Allow spawned nodes to fetch code from this node
-    :erl_boot_server.start([])
-    allow_boot(~c"127.0.0.1")
+    ensure_peer_table()
+    ensure_distributed()
 
     spawn_node(:"#{node_name}@127.0.0.1", options)
   end
@@ -46,7 +46,14 @@ defmodule NodeHelper do
   Stops a peer node.
   """
   def stop_node(node) do
-    :slave.stop(node)
+    case :ets.lookup(@peer_table, node) do
+      [{^node, peer_pid}] ->
+        :peer.stop(peer_pid)
+        :ets.delete(@peer_table, node)
+
+      [] ->
+        :ok
+    end
   end
 
   @doc """
@@ -54,6 +61,51 @@ defmodule NodeHelper do
   """
   def stop_nodes(nodes) when is_list(nodes) do
     Enum.each(nodes, &stop_node/1)
+  end
+
+  defp ensure_peer_table do
+    case :ets.whereis(@peer_table) do
+      :undefined ->
+        owner = ensure_peer_owner()
+        :ets.new(@peer_table, [:named_table, :public, :set, {:heir, owner, :peer_table}])
+
+      _ ->
+        :ok
+    end
+  end
+
+  defp ensure_peer_owner do
+    case Process.whereis(@peer_owner) do
+      nil ->
+        pid =
+          spawn(fn ->
+            receive do
+              :stop -> :ok
+            end
+          end)
+
+        try do
+          Process.register(pid, @peer_owner)
+          pid
+        rescue
+          ArgumentError ->
+            Process.exit(pid, :kill)
+            Process.whereis(@peer_owner)
+        end
+
+      pid ->
+        pid
+    end
+  end
+
+  defp ensure_distributed do
+    case node() do
+      :nonode@nohost ->
+        {:ok, _} = :net_kernel.start([:"primary@127.0.0.1", :longnames])
+
+      _ ->
+        :ok
+    end
   end
 
   @doc """
@@ -94,7 +146,21 @@ defmodule NodeHelper do
   ## Private Functions
 
   defp spawn_node(node_host, options) do
-    {:ok, node} = :slave.start(~c"127.0.0.1", node_name(node_host), inet_loader_args())
+    # Use :peer module (OTP 25+) instead of deprecated :slave
+    peer_opts = %{
+      name: node_name(node_host),
+      host: ~c"127.0.0.1",
+      longnames: true,
+      args: [
+        ~c"-setcookie",
+        ~c"#{:erlang.get_cookie()}"
+      ]
+    }
+
+    {:ok, peer_pid, node} = :peer.start(peer_opts)
+
+    # Store peer PID for later cleanup
+    :ets.insert(@peer_table, {node, peer_pid})
 
     # Add code paths from current node
     rpc(node, :code, :add_paths, [:code.get_path()])
@@ -131,6 +197,26 @@ defmodule NodeHelper do
       Logger.debug("Started #{app_name} on #{node}: #{inspect(result)}")
     end
 
+    preload_modules =
+      Application.get_env(:mesh, :test_preload_modules, [])
+
+    for module <- preload_modules do
+      case :code.get_object_code(module) do
+        {^module, binary, filename} ->
+          rpc(node, :code, :load_binary, [module, filename, binary])
+
+        _ ->
+          :ok
+      end
+    end
+
+    preload_files =
+      Application.get_env(:mesh, :test_preload_files, [])
+
+    for file <- preload_files do
+      rpc(node, Code, :require_file, [file])
+    end
+
     # Start Mesh.Supervisor explicitly on the remote node
     # (Mesh is a library, not an application, so it doesn't have mod: in mix.exs)
     if :mesh in ordered_apps do
@@ -148,15 +234,6 @@ defmodule NodeHelper do
     end
 
     node
-  end
-
-  defp inet_loader_args do
-    ~c"-loader inet -hosts 127.0.0.1 -setcookie #{:erlang.get_cookie()}"
-  end
-
-  defp allow_boot(host) do
-    {:ok, ipv4} = :inet.parse_ipv4_address(host)
-    :erl_boot_server.add_slave(ipv4)
   end
 
   defp node_name(node_host) do

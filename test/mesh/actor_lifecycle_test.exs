@@ -56,6 +56,10 @@ defmodule Mesh.ActorLifecycleTest do
     :ok
   end
 
+  defp actor_key(actor_id) do
+    Mesh.Actors.ActorTable.key(:lifecycle_test, SelfShutdownActor, actor_id)
+  end
+
   describe "voluntary actor shutdown" do
     test "actor shuts down after idle timeout and is recreated on next call" do
       actor_id = "shutdown_test_#{System.unique_integer([:positive])}"
@@ -234,7 +238,7 @@ defmodule Mesh.ActorLifecycleTest do
           capability: :lifecycle_test
         })
 
-      assert {:ok, ^pid, _node} = Mesh.Actors.ActorTable.get(actor_id)
+      assert {:ok, ^pid, _node} = Mesh.Actors.ActorTable.get(actor_key(actor_id))
 
       Process.sleep(700)
       refute Process.alive?(pid)
@@ -242,7 +246,7 @@ defmodule Mesh.ActorLifecycleTest do
       # Allow time for ActorOwner to process DOWN message
       Process.sleep(100)
 
-      assert :not_found = Mesh.Actors.ActorTable.get(actor_id)
+      assert :not_found = Mesh.Actors.ActorTable.get(actor_key(actor_id))
 
       {:ok, new_pid, _} =
         Mesh.call(%Mesh.Request{
@@ -253,7 +257,7 @@ defmodule Mesh.ActorLifecycleTest do
         })
 
       assert new_pid != pid
-      assert {:ok, ^new_pid, _node} = Mesh.Actors.ActorTable.get(actor_id)
+      assert {:ok, ^new_pid, _node} = Mesh.Actors.ActorTable.get(actor_key(actor_id))
     end
   end
 end
