@@ -7,6 +7,10 @@ defmodule Mesh.Actors.ActorTable do
     GenServer.start_link(__MODULE__, nil, name: __MODULE__)
   end
 
+  def key(capability, actor_module, actor_id) do
+    {capability, actor_module, actor_id}
+  end
+
   def get(actor_name) do
     case :ets.lookup(@table, actor_name) do
       [{^actor_name, pid, node}] -> {:ok, pid, node}
@@ -22,6 +26,10 @@ defmodule Mesh.Actors.ActorTable do
   def delete(actor_name) do
     :ets.delete(@table, actor_name)
     :ok
+  end
+
+  def entries do
+    :ets.tab2list(@table)
   end
 
   @impl true

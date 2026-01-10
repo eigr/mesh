@@ -18,7 +18,13 @@ defmodule Mesh.Actors.ActorSystem do
                owner,
                Mesh.Actors.ActorOwner,
                :call,
-               [request.id, request.payload, request.module, request.init_arg],
+               [
+                 request.id,
+                 request.payload,
+                 request.module,
+                 request.capability,
+                 request.init_arg
+               ],
                5000
              ) do
           {:badrpc, reason} -> {:error, {:rpc_failed, reason}}
@@ -45,7 +51,13 @@ defmodule Mesh.Actors.ActorSystem do
                owner,
                Mesh.Actors.ActorOwner,
                :cast,
-               [request.id, request.payload, request.module, request.init_arg],
+               [
+                 request.id,
+                 request.payload,
+                 request.module,
+                 request.capability,
+                 request.init_arg
+               ],
                5000
              ) do
           {:badrpc, reason} -> {:error, {:rpc_failed, reason}}

@@ -58,24 +58,24 @@ defmodule Mesh.Actors.ActorOwnerTest do
 
   describe "call/4" do
     test "creates actor on first call" do
-      {:ok, pid, result} = ActorOwner.call("new_actor", :increment, TestActor)
+      {:ok, pid, result} = ActorOwner.call("new_actor", :increment, TestActor, :test)
 
       assert is_pid(pid)
       assert result == 1
     end
 
     test "reuses existing actor on subsequent calls" do
-      {:ok, pid1, _} = ActorOwner.call("persistent_actor", :increment, TestActor)
-      {:ok, pid2, result} = ActorOwner.call("persistent_actor", :increment, TestActor)
+      {:ok, pid1, _} = ActorOwner.call("persistent_actor", :increment, TestActor, :test)
+      {:ok, pid2, result} = ActorOwner.call("persistent_actor", :increment, TestActor, :test)
 
       assert pid1 == pid2
       assert result == 2
     end
 
     test "isolates state between different actor_ids" do
-      {:ok, _, result1} = ActorOwner.call("actor_a", :increment, TestActor)
-      {:ok, _, result2} = ActorOwner.call("actor_b", :increment, TestActor)
-      {:ok, _, result3} = ActorOwner.call("actor_a", :increment, TestActor)
+      {:ok, _, result1} = ActorOwner.call("actor_a", :increment, TestActor, :test)
+      {:ok, _, result2} = ActorOwner.call("actor_b", :increment, TestActor, :test)
+      {:ok, _, result3} = ActorOwner.call("actor_a", :increment, TestActor, :test)
 
       assert result1 == 1
       assert result2 == 1
@@ -86,7 +86,7 @@ defmodule Mesh.Actors.ActorOwnerTest do
       tasks =
         for _ <- 1..10 do
           Task.async(fn ->
-            ActorOwner.call("concurrent_actor", :increment, TestActor)
+            ActorOwner.call("concurrent_actor", :increment, TestActor, :test)
           end)
         end
 
@@ -95,7 +95,7 @@ defmodule Mesh.Actors.ActorOwnerTest do
       assert length(results) == 10
       assert Enum.all?(results, fn {:ok, _pid, _result} -> true end)
 
-      {:ok, _, final_count} = ActorOwner.call("concurrent_actor", :get_counter, TestActor)
+      {:ok, _, final_count} = ActorOwner.call("concurrent_actor", :get_counter, TestActor, :test)
       assert final_count == 10
     end
 
@@ -103,7 +103,7 @@ defmodule Mesh.Actors.ActorOwnerTest do
       tasks =
         for i <- 1..50 do
           Task.async(fn ->
-            ActorOwner.call("actor_#{i}", :increment, TestActor)
+            ActorOwner.call("actor_#{i}", :increment, TestActor, :test)
           end)
         end
 
@@ -114,24 +114,24 @@ defmodule Mesh.Actors.ActorOwnerTest do
     end
 
     test "cleans up actor entry when process crashes" do
-      {:ok, pid, _} = ActorOwner.call("crash_test", :get_counter, TestActor)
+      {:ok, pid, _} = ActorOwner.call("crash_test", :get_counter, TestActor, :test)
 
       Process.exit(pid, :kill)
       Process.sleep(100)
 
-      {:ok, new_pid, _} = ActorOwner.call("crash_test", :get_counter, TestActor)
+      {:ok, new_pid, _} = ActorOwner.call("crash_test", :get_counter, TestActor, :test)
       assert new_pid != pid
     end
 
     test "handles slow operations without blocking other actors" do
       Task.async(fn ->
-        ActorOwner.call("slow_actor", :slow_operation, SlowActor)
+        ActorOwner.call("slow_actor", :slow_operation, SlowActor, :test)
       end)
 
       Process.sleep(10)
 
       start_time = System.monotonic_time(:millisecond)
-      {:ok, _, _} = ActorOwner.call("fast_actor", :increment, TestActor)
+      {:ok, _, _} = ActorOwner.call("fast_actor", :increment, TestActor, :test)
       duration = System.monotonic_time(:millisecond) - start_time
 
       assert duration < 50
@@ -140,16 +140,16 @@ defmodule Mesh.Actors.ActorOwnerTest do
 
   describe "cast/4" do
     test "sends message without waiting for response" do
-      {:ok, _pid, 0} = ActorOwner.call("cast_test_unique", :get_counter, TestActor)
+      {:ok, _pid, 0} = ActorOwner.call("cast_test_unique", :get_counter, TestActor, :test)
 
-      result = ActorOwner.cast("cast_test_unique", :increment, TestActor)
+      result = ActorOwner.cast("cast_test_unique", :increment, TestActor, :test)
       assert result == :ok
     end
   end
 
   describe "actor lifecycle" do
     test "actor process is supervised" do
-      {:ok, pid, _} = ActorOwner.call("supervised_actor", :increment, TestActor)
+      {:ok, pid, _} = ActorOwner.call("supervised_actor", :increment, TestActor, :test)
 
       ref = Process.monitor(pid)
       Process.exit(pid, :kill)
@@ -158,15 +158,15 @@ defmodule Mesh.Actors.ActorOwnerTest do
     end
 
     test "new actor created after crash with clean state" do
-      {:ok, _, _} = ActorOwner.call("lifecycle_test", :increment, TestActor)
-      {:ok, _, result} = ActorOwner.call("lifecycle_test", :increment, TestActor)
+      {:ok, _, _} = ActorOwner.call("lifecycle_test", :increment, TestActor, :test)
+      {:ok, _, result} = ActorOwner.call("lifecycle_test", :increment, TestActor, :test)
       assert result == 2
 
-      {:ok, pid, _} = ActorOwner.call("lifecycle_test", :get_counter, TestActor)
+      {:ok, pid, _} = ActorOwner.call("lifecycle_test", :get_counter, TestActor, :test)
       Process.exit(pid, :kill)
       Process.sleep(100)
 
-      {:ok, _, new_result} = ActorOwner.call("lifecycle_test", :increment, TestActor)
+      {:ok, _, new_result} = ActorOwner.call("lifecycle_test", :increment, TestActor, :test)
       assert new_result == 1
     end
   end

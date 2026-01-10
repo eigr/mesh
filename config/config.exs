@@ -3,9 +3,8 @@ import Config
 config :mesh,
   shards: 4096
 
-# Disable Logger output
+# Set default log level (can be overridden per environment)
 config :logger,
-  level: :warning,
-  backends: []
+  level: :warning
 
 import_config "#{config_env()}.exs"

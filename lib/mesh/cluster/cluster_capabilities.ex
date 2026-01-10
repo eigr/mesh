@@ -3,6 +3,9 @@ defmodule Mesh.Cluster.Capabilities do
   require Logger
 
   @name __MODULE__
+  @propagation_wait_ms 2000
+  @propagation_check_ms 50
+  @propagation_rpc_timeout_ms 1000
 
   def start_link(_) do
     GenServer.start_link(__MODULE__, %{}, name: @name)
@@ -13,7 +16,8 @@ defmodule Mesh.Cluster.Capabilities do
   end
 
   def register_capabilities(node \\ node(), capabilities) when is_list(capabilities) do
-    GenServer.cast(@name, {:register, node, MapSet.new(capabilities)})
+    :ok = GenServer.call(@name, {:register, node, MapSet.new(capabilities)})
+    Mesh.Actors.ActorOwnerSupervisor.sync_shards()
     propagate_capabilities(node, capabilities)
   end
 
@@ -27,16 +31,15 @@ defmodule Mesh.Cluster.Capabilities do
 
   @impl true
   def handle_cast({:register, node, capabilities}, state) do
-    Logger.debug(
-      "Registering capabilities #{inspect(MapSet.to_list(capabilities))} for node #{node}"
-    )
-
-    new_state = put_in(state.node_capabilities[node], capabilities)
-
-    # Synchronize shards asynchronously without linking
+    new_state = register_in_state(state, node, capabilities)
     spawn(fn -> Mesh.Actors.ActorOwnerSupervisor.sync_shards() end)
-
     {:noreply, new_state}
+  end
+
+  @impl true
+  def handle_call({:register, node, capabilities}, _from, state) do
+    new_state = register_in_state(state, node, capabilities)
+    {:reply, :ok, new_state}
   end
 
   @impl true
@@ -45,6 +48,7 @@ defmodule Mesh.Cluster.Capabilities do
       state.node_capabilities
       |> Enum.filter(fn {_node, caps} -> MapSet.member?(caps, actor_type) end)
       |> Enum.map(fn {node, _} -> node end)
+      |> Enum.sort()
 
     {:reply, nodes, state}
   end
@@ -57,6 +61,7 @@ defmodule Mesh.Cluster.Capabilities do
       |> Enum.flat_map(& &1)
       |> MapSet.new()
       |> MapSet.to_list()
+      |> Enum.sort()
 
     {:reply, caps, state}
   end
@@ -70,15 +75,7 @@ defmodule Mesh.Cluster.Capabilities do
 
     for {existing_node, caps} <- state.node_capabilities, existing_node != node do
       spawn(fn ->
-        # Silence errors during initialization (module may not be loaded yet)
-        try do
-          :rpc.cast(node, __MODULE__, :update_capabilities_from_remote, [
-            existing_node,
-            MapSet.to_list(caps)
-          ])
-        catch
-          _, _ -> :ok
-        end
+        propagate_to_node(node, existing_node, MapSet.to_list(caps))
       end)
     end
 
@@ -94,7 +91,40 @@ defmodule Mesh.Cluster.Capabilities do
 
   defp propagate_capabilities(origin_node, capabilities) do
     for n <- Node.list() do
-      :rpc.cast(n, __MODULE__, :update_capabilities_from_remote, [origin_node, capabilities])
+      spawn(fn ->
+        propagate_to_node(n, origin_node, capabilities)
+      end)
+    end
+  end
+
+  defp propagate_to_node(remote_node, origin_node, capabilities) do
+    if await_remote_capabilities(remote_node) do
+      :rpc.cast(remote_node, __MODULE__, :update_capabilities_from_remote, [
+        origin_node,
+        capabilities
+      ])
+    else
+      Logger.debug("Skipping capability propagation to #{remote_node}: remote not ready")
+    end
+  end
+
+  defp await_remote_capabilities(remote_node) do
+    deadline = System.monotonic_time(:millisecond) + @propagation_wait_ms
+    await_remote_capabilities(remote_node, deadline)
+  end
+
+  defp await_remote_capabilities(remote_node, deadline) do
+    case :rpc.call(remote_node, Process, :whereis, [@name], @propagation_rpc_timeout_ms) do
+      pid when is_pid(pid) ->
+        true
+
+      _ ->
+        if System.monotonic_time(:millisecond) > deadline do
+          false
+        else
+          Process.sleep(@propagation_check_ms)
+          await_remote_capabilities(remote_node, deadline)
+        end
     end
   end
 
@@ -105,5 +135,13 @@ defmodule Mesh.Cluster.Capabilities do
       # Ignore if the process does not exist yet
       _ -> :ok
     end
+  end
+
+  defp register_in_state(state, node, capabilities) do
+    Logger.debug(
+      "Registering capabilities #{inspect(MapSet.to_list(capabilities))} for node #{node}"
+    )
+
+    put_in(state.node_capabilities[node], capabilities)
   end
 end
