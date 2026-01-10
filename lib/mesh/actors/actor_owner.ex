@@ -18,7 +18,6 @@ defmodule Mesh.Actors.ActorOwner do
 
   @impl true
   def init(shard_id) do
-    # Trap exits so terminate/2 is called when supervisor terminates us
     Process.flag(:trap_exit, true)
     {:ok, %{shard: shard_id, monitors: %{}}}
   end
