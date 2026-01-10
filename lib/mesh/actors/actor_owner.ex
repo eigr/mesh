@@ -54,7 +54,6 @@ defmodule Mesh.Actors.ActorOwner do
     case Mesh.Actors.ActorTable.get(actor_key) do
       {:ok, pid, _node} ->
         if Process.alive?(pid) do
-          # Actor exists and is alive - ensure we have a monitor
           new_state = ensure_monitored(actor_key, pid, state)
           {:ok, pid, new_state}
         else
