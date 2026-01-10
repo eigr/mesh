@@ -66,7 +66,6 @@ defmodule Mesh.Actors.ActorOwner do
     end
   end
 
-  # Creates a new actor, monitors it, and registers in ActorTable
   defp create_actor(actor_key, actor_id, actor_module, capability, init_arg, state) do
     case start_actor(actor_module, actor_id, capability, init_arg) do
       {:ok, pid} ->
