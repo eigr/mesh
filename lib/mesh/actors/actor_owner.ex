@@ -117,7 +117,6 @@ defmodule Mesh.Actors.ActorOwner do
 
       case Mesh.Actors.ActorTable.get(actor_key) do
         {:ok, pid, _node} ->
-          # Kill the actor immediately
           Process.exit(pid, :kill)
           Mesh.Actors.ActorTable.delete(actor_key)
 
