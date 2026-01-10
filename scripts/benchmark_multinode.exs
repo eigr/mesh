@@ -59,9 +59,10 @@ end
 IO.puts("")
 
 IO.puts("Synchronizing shards on all nodes...")
-NodeHelper.sync_all_shards(nodes)
+# Temporarily skip sync for testing - actors will be created on-demand
+# NodeHelper.sync_all_shards(nodes)
 Process.sleep(500)
-IO.puts("Shards synchronized\n")
+IO.puts("Shards synchronized (skipped - on-demand mode)\n")
 
 IO.puts("Initial Statistics:")
 

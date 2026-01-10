@@ -1,6 +1,12 @@
 defmodule Mesh.Shards.ShardRouter do
   @moduledoc """
-  Routes actors to nodes based on consistent hashing (hash ring).
+  Routes processes to nodes based on hashing (hash ring).
+
+  The hashing strategy is configurable via application config:
+
+      config :mesh, :hash_strategy, Mesh.Shards.HashStrategy.EventualConsistency
+
+  The default strategy uses modulo-based distribution for deterministic routing.
   """
 
   @doc """
@@ -16,6 +22,8 @@ defmodule Mesh.Shards.ShardRouter do
 
   Returns `{:ok, node}` if nodes are available for the capability,
   or `{:error, :no_nodes}` if no nodes support the capability.
+
+  The specific distribution algorithm is determined by the configured hash strategy.
   """
   @spec owner_node(non_neg_integer(), atom()) :: {:ok, node()} | {:error, :no_nodes}
   def owner_node(shard, capability) do
@@ -25,8 +33,11 @@ defmodule Mesh.Shards.ShardRouter do
     if nodes == [] do
       {:error, :no_nodes}
     else
-      idx = rem(shard, length(nodes))
-      {:ok, Enum.at(nodes, idx)}
+      strategy =
+        Application.get_env(:mesh, :hash_strategy, Mesh.Shards.HashStrategy.EventualConsistency)
+
+      node = strategy.owner_node(shard, capability, nodes)
+      {:ok, node}
     end
   end
 end

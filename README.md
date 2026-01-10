@@ -32,7 +32,7 @@ The hash ring uses hashing with 4096 shards to distribute processes:
 process_id → hash(process_id) → shard (0..4095) → owner_node
 ```
 
-Same ID always maps to the same shard. Shards are distributed round-robin across nodes supporting the capability. When topology changes, only affected shards remap.
+Same ID always maps to the same shard. Shards are distributed across nodes using modulo-based routing.
 
 >__NOTE__: Mesh uses **eventual consistency** for process placement. Shards are used purely for routing decisions - they do not provide state guarantees or transactions. Each process manages its own state independently. During network partitions or topology changes, the same process ID may temporarily exist on multiple nodes until the system converges.
 
