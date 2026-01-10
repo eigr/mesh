@@ -51,7 +51,7 @@ Add to `mix.exs`:
 ```elixir
 def deps do
   [
-    {:mesh, "~> 0.1.0"},
+    {:mesh, "~> 0.1"},
     {:libcluster, "~> 3.3"}
   ]
 end

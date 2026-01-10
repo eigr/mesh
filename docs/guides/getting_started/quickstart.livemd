@@ -2,7 +2,7 @@
 
 ```elixir
 Mix.install([
-  {:mesh, "~> 0.1.1"},
+  {:mesh, "~> 0.1"},
   {:libcluster, "~> 3.3"} # optional
 ])
 ```
