@@ -175,13 +175,14 @@ IO.puts("player_123 is on shard #{shard}")
 IO.puts("Shard #{shard} is owned by: #{owner_node}")
 ```
 
-__NOTE__: Mesh uses **eventual consistency** for process placement. Shards are used purely for routing decisions - they do not provide state guarantees or transactions. Each process manages its own state independently. During network partitions or topology changes, the same process ID may temporarily exist on multiple nodes until the system converges.
+__NOTE__: The default hash strategy (`EventualConsistency`) uses **eventual consistency** for process placement. Shards are used purely for routing decisions - they do not provide state guarantees or transactions. Each process manages its own state independently. During network partitions or topology changes, the same process ID may temporarily exist on multiple nodes until the system converges. You can implement custom hash strategies with different consistency guarantees - see [Configuration](configuration.md).
 
 ## Next Steps
 
-* Learn about [Clustering](clustering.md) to distribute processes across multiple nodes
-* Explore [Implementing Processes](../advanced/processes.md) for complex stateful processes
-* See [Sharding](../advanced/sharding.md) to understand process distribution
+* Learn about [Configuration](configuration.md) to customize hash strategies and sharding
+* Explore [Clustering](clustering.md) to distribute processes across multiple nodes
+* See [Implementing Processes](../advanced/processes.md) for complex stateful processes
+* Understand [Sharding](../advanced/sharding.md) internals and distribution
 
 ## Additional Links
 

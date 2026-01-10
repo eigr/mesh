@@ -1,14 +1,16 @@
 # Sharding
 
-Mesh uses consistent hashing to distribute processes across nodes in a cluster.
+Mesh uses hashing to distribute processes across nodes in a cluster.
 
 ## Hash Ring
 
-Mesh divides the actor ID space into 4096 shards using a hash ring:
+Mesh divides the actor ID space into 4096 shards (configurable) using a hash ring:
 
 ```
 actor_id → hash(actor_id) → shard (0..4095) → owner_node
 ```
+
+The hash strategy determines how shards map to nodes. The default strategy uses modulo-based routing for simplicity and performance.
 
 ### How It Works
 
@@ -24,11 +26,13 @@ actor_id → hash(actor_id) → shard (0..4095) → owner_node
    # [:node1@host, :node2@host, :node3@host]
    ```
 
-3. **Determine owner**:
+3. **Determine owner** (using default EventualConsistency strategy):
    ```elixir
    owner = Enum.at(nodes, rem(shard, length(nodes)))
    # Enum.at(nodes, rem(2451, 3)) → node1@host
    ```
+
+> **Note**: You can customize the hash strategy to implement different routing algorithms. See [Configuration](../getting_started/configuration.md) for details.
 
 ## Benefits
 
@@ -78,10 +82,6 @@ config :mesh, shards: 4096
 - **Higher (8192+)**: Better distribution with many nodes (10+)
 - **Lower (2048)**: Less memory overhead for small clusters (2-4 nodes)
 
-**Trade-offs**:
-- More shards = Better distribution but more memory
-- Fewer shards = Less memory but coarser distribution
-
 ## Shard Distribution
 
 Check how processes are distributed:
@@ -115,7 +115,7 @@ defmodule MyApp.ShardMonitor do
     # Get all shards owned by this node
     local_node = node()
     shard_count = Mesh.Shards.ShardConfig.shard_count()
-    capabilities = Mesh.Cluster.Capabilities.all_capabilities()
+    capabilities = Mesh.all_capabilities()
     
     owned_shards = 
       for shard <- 0..(shard_count - 1),

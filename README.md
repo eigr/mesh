@@ -32,9 +32,9 @@ The hash ring uses hashing with 4096 shards to distribute processes:
 process_id → hash(process_id) → shard (0..4095) → owner_node
 ```
 
-Same ID always maps to the same shard. Shards are distributed round-robin across nodes supporting the capability. When topology changes, only affected shards remap.
+Same ID always maps to the same shard. Shards are distributed across nodes using the configured hash strategy (default: modulo-based routing).
 
->__NOTE__: Mesh uses **eventual consistency** for process placement. Shards are used purely for routing decisions - they do not provide state guarantees or transactions. Each process manages its own state independently. During network partitions or topology changes, the same process ID may temporarily exist on multiple nodes until the system converges.
+>__NOTE__: The default hash strategy (`EventualConsistency`) uses **eventual consistency** for process placement. Shards are used purely for routing decisions - they do not provide state guarantees or transactions. Each process manages its own state independently. During network partitions or topology changes, the same process ID may temporarily exist on multiple nodes until the system converges. You can implement custom hash strategies with different consistency guarantees - see [Configuration](docs/guides/getting_started/configuration.md).
 
 Processes are created lazily on first invocation. When you call a non-existent process, Mesh:
 1. Determines target node via hash ring
@@ -188,6 +188,14 @@ Run benchmarks:
 mix run scripts/benchmark_singlenode.exs
 elixir --name bench@127.0.0.1 --cookie mesh -S mix run scripts/benchmark_multinode.exs
 ```
+
+## Documentation
+
+- [Quickstart Guide](docs/guides/getting_started/quickstart.livemd) - Get started in 5 minutes
+- [Configuration](docs/guides/getting_started/configuration.md) - Configure hash strategies and sharding
+- [Clustering](docs/guides/getting_started/clustering.md) - Multi-node setup
+- [Sharding](docs/guides/advanced/sharding.md) - Process distribution internals
+- [Implementing Processes](docs/guides/advanced/processes.md) - Building stateful actors
 
 ## Development
 

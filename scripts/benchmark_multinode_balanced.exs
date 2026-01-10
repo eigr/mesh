@@ -53,62 +53,69 @@ Enum.each(all_nodes, fn node ->
   IO.puts("  Memory: #{Float.round(stats.memory_mb, 2)} MB")
   IO.puts("  Actors: #{stats.actors}")
 end)
+# Store benchmark results
+benchmark_results = %{}
+
 IO.puts("")
 
-IO.puts("Benchmark 1: Creating 12,000 actors (3000 per capability)")
+IO.write("Running Benchmark 1: Creating 40,000 actors (10000 per capability)... ")
 
 {time_us, results} =
   :timer.tc(fn ->
     for capability <- [:game, :chat, :payment, :inventory],
-        i <- 1..3_000 do
+        i <- 1..10_000 do
       {capability, i}
     end
     |> Task.async_stream(
       fn {capability, i} ->
         Mesh.call(req.(Mesh.Actors.VirtualTestActor, "actor_#{capability}_#{i}", %{test: true}, capability))
       end,
-      max_concurrency: 300,
-      timeout: 30_000
+      max_concurrency: 500,
+      timeout: 60_000
     )
     |> Enum.to_list()
   end)
 
 successes = Enum.count(results, fn {:ok, {:ok, _pid, _reply}} -> true; _ -> false end)
 time_s = time_us / 1_000_000
+failures = 40_000 - successes
 
-IO.puts("Time: #{Float.round(time_s, 2)}s")
-IO.puts("Throughput: #{Float.round(12_000 / time_s, 2)} actors/s")
-IO.puts("Success: #{successes}/12000")
+actor_distribution =
+  Enum.map(all_nodes, fn node ->
+    actor_count = case :rpc.call(node, :ets, :info, [Mesh.Actors.ActorTable, :size]) do
+      :undefined -> 0
+      count when is_integer(count) -> count
+      _ -> 0
+    end
+    {node, actor_count}
+  end)
 
-if successes < 12_000 do
-  failures = Enum.count(results, fn {:ok, {:ok, _pid, _reply}} -> false; _ -> true end)
-  IO.puts("Failures: #{failures}")
-end
+benchmark_results =
+  Map.put(benchmark_results, :bench1, %{
+    name: "Creating 40,000 actors (10000 per capability)",
+    time: time_s,
+    throughput: 40_000 / time_s,
+    successes: successes,
+    failures: failures,
+    total: 40_000,
+    actor_distribution: actor_distribution
+  })
 
-IO.puts("\nActor distribution per node:")
-Enum.each(all_nodes, fn node ->
-  actor_count = case :rpc.call(node, :ets, :info, [Mesh.Actors.ActorTable, :size]) do
-    :undefined -> 0
-    count when is_integer(count) -> count
-    _ -> 0
-  end
-  IO.puts("  #{node}: #{actor_count} actors")
-end)
+IO.puts("done (#{Float.round(time_s, 2)}s)")
 
-IO.puts("")
-IO.puts("Benchmark 2: 20,000 invocations on existing actors")
+IO.write("Running Benchmark 2: 50,000 invocations on existing actors... ")
 
 {time_us, results} =
   :timer.tc(fn ->
-    1..20_000
+    1..50_000
     |> Task.async_stream(
       fn i ->
         capability = Enum.at([:game, :chat, :payment, :inventory], rem(i, 4))
-        actor_id = "actor_#{capability}_#{rem(i, 3000) + 1}"
+        actor_id = "actor_#{capability}_#{rem(i, 10000) + 1}"
         Mesh.call(req.(Mesh.Actors.VirtualTestActor, actor_id, %{invoke: i}, capability))
       end,
-      max_concurrency: 400,
-      timeout: 30_000
+      max_concurrency: 500,
+      timeout: 60_000
     )
     |> Enum.to_list()
   end)
@@ -116,11 +123,18 @@ IO.puts("Benchmark 2: 20,000 invocations on existing actors")
 successes = Enum.count(results, fn {:ok, {:ok, _pid, _reply}} -> true; _ -> false end)
 time_s = time_us / 1_000_000
 
-IO.puts("Time: #{Float.round(time_s, 2)}s")
-IO.puts("Throughput: #{Float.round(20_000 / time_s, 2)} req/s")
-IO.puts("Success: #{successes}/20000\n")
+benchmark_results =
+  Map.put(benchmark_results, :bench2, %{
+    name: "50,000 invocations on existing actors",
+    time: time_s,
+    throughput: 50_000 / time_s,
+    successes: successes,
+    total: 50_000
+  })
 
-IO.puts("Benchmark 3: Hash ring distribution (10,000 sample)")
+IO.puts("done (#{Float.round(time_s, 2)}s)")
+
+IO.write("Running Benchmark 3: Hash ring distribution (10,000 sample)... ")
 
 distribution =
   1..10_000
@@ -133,37 +147,29 @@ distribution =
   end)
   |> Enum.frequencies()
 
-IO.puts("Expected distribution per node:")
 total = 10_000
-Enum.each(distribution, fn {node, count} ->
-  percentage = count / total * 100
-  IO.puts("  #{node}: #{count} actors (#{Float.round(percentage, 2)}%)")
-end)
-
-# Calculate standard deviation
 mean = total / map_size(distribution)
 variance = Enum.sum(Enum.map(distribution, fn {_, count} -> :math.pow(count - mean, 2) end)) / map_size(distribution)
 std_dev = :math.sqrt(variance)
-
-IO.puts("\nStandard deviation: #{Float.round(std_dev, 2)}")
 balance_quality = if std_dev < mean * 0.1, do: "Excellent (<10%)", else: if std_dev < mean * 0.15, do: "Good (<15%)", else: "Needs improvement"
-IO.puts("Balance quality: #{balance_quality}\n")
 
+benchmark_results =
+  Map.put(benchmark_results, :bench3, %{
+    name: "Hash ring distribution for 10,000 samples",
+    distribution: distribution,
+    std_dev: std_dev,
+    mean: mean,
+    balance_quality: balance_quality
+  })
 
-IO.puts("Final Cluster State")
+IO.puts("done")
 
-Enum.each(all_nodes, fn node ->
-  stats = NodeHelper.node_stats(node)
-  
-  IO.puts("\n#{node}:")
-  IO.puts("  Status: #{if stats.alive, do: "Online", else: "Offline"}")
-  
-  if stats.alive do
-    IO.puts("  Processes: #{stats.processes}")
-    IO.puts("  Memory: #{Float.round(stats.memory_mb, 2)} MB")
-    IO.puts("  Actors: #{stats.actors}")
-  end
-end)
+# Collect final cluster stats
+final_cluster_stats =
+  Enum.map(all_nodes, fn node ->
+    stats = NodeHelper.node_stats(node)
+    {node, stats}
+  end)
 
 total_actors =
   all_nodes
@@ -177,9 +183,60 @@ total_actors =
   end)
   |> Enum.sum()
 
-IO.puts("\nTotal actors in cluster: #{total_actors}")
+# Print results summary
+IO.puts("\n" <> String.duplicate("-", 80))
+IO.puts("BENCHMARK RESULTS SUMMARY")
+IO.puts(String.duplicate("-", 80) <> "\n")
 
-IO.puts("\Cleanup")
-IO.puts("Stopping slave nodes...")
+# Benchmark 1
+b1 = benchmark_results[:bench1]
+IO.puts("1. #{b1.name}")
+IO.puts("   Time: #{Float.round(b1.time, 2)}s")
+IO.puts("   Throughput: #{Float.round(b1.throughput, 2)} actors/s")
+IO.puts("   Success: #{b1.successes}/#{b1.total} | Failures: #{b1.failures}")
+IO.puts("   Actor distribution per node:")
+Enum.each(b1.actor_distribution, fn {node, count} ->
+  IO.puts("     #{node}: #{count} actors")
+end)
+IO.puts("")
+
+# Benchmark 2
+b2 = benchmark_results[:bench2]
+IO.puts("2. #{b2.name}")
+IO.puts("   Time: #{Float.round(b2.time, 2)}s")
+IO.puts("   Throughput: #{Float.round(b2.throughput, 2)} req/s")
+IO.puts("   Success: #{b2.successes}/#{b2.total}\n")
+
+# Benchmark 3
+b3 = benchmark_results[:bench3]
+IO.puts("3. #{b3.name}")
+IO.puts("   Expected distribution per node:")
+Enum.each(b3.distribution, fn {node, count} ->
+  percentage = count / 10_000 * 100
+  IO.puts("     #{node}: #{count} actors (#{Float.round(percentage, 2)}%)")
+end)
+IO.puts("   Standard deviation: #{Float.round(b3.std_dev, 2)}")
+IO.puts("   Balance quality: #{b3.balance_quality}\n")
+
+IO.puts("\nFINAL CLUSTER STATE")
+IO.puts(String.duplicate("-", 40) <> "\n")
+
+Enum.each(final_cluster_stats, fn {node, stats} ->
+  IO.puts("#{node}:")
+  IO.puts("  Status: #{if stats.alive, do: "Online", else: "Offline"}")
+  
+  if stats.alive do
+    IO.puts("  Processes: #{stats.processes}")
+    IO.puts("  Memory: #{Float.round(stats.memory_mb, 2)} MB")
+    IO.puts("  Actors: #{stats.actors}")
+  end
+  IO.puts("")
+end)
+
+IO.puts("Total actors in cluster: #{total_actors}")
+
+IO.puts("\n" <> String.duplicate("-", 80))
+IO.puts("Cleanup: Stopping slave nodes...")
 NodeHelper.stop_nodes(nodes)
-IO.puts("Benchmark completed!\n")
+IO.puts("Benchmark completed successfully!")
+IO.puts(String.duplicate("-", 80) <> "\n")
