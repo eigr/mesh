@@ -78,8 +78,6 @@ defmodule Mesh.Actors.ActorOwner do
     end
   end
 
-  # Ensures we have a monitor for the given actor.
-  # This handles the case where ActorOwner restarted and lost its monitors.
   defp ensure_monitored(actor_key, pid, state) do
     already_monitored? =
       Enum.any?(state.monitors, fn {_ref, key} -> key == actor_key end)
