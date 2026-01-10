@@ -57,7 +57,6 @@ defmodule Mesh.Actors.ActorOwner do
           new_state = ensure_monitored(actor_key, pid, state)
           {:ok, pid, new_state}
         else
-          # Stale PID - clean up and create new actor
           Mesh.Actors.ActorTable.delete(actor_key)
           create_actor(actor_key, actor_id, actor_module, capability, init_arg, state)
         end
