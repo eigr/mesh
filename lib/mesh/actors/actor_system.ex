@@ -10,29 +10,34 @@ defmodule Mesh.Actors.ActorSystem do
   """
   @spec call(Mesh.Request.t()) :: {:ok, pid(), term()} | {:error, term()}
   def call(%Mesh.Request{} = request) do
-    shard = Mesh.Shards.ShardRouter.shard_for(request.id)
+    # Check if capability is rebalancing
+    if Mesh.Cluster.Rebalancing.rebalancing?(request.capability) do
+      {:error, {:rebalancing, request.capability}}
+    else
+      shard = Mesh.Shards.ShardRouter.shard_for(request.id)
 
-    case Mesh.Shards.ShardRouter.owner_node(shard, request.capability) do
-      {:ok, owner} ->
-        case :rpc.call(
-               owner,
-               Mesh.Actors.ActorOwner,
-               :call,
-               [
-                 request.id,
-                 request.payload,
-                 request.module,
-                 request.capability,
-                 request.init_arg
-               ],
-               5000
-             ) do
-          {:badrpc, reason} -> {:error, {:rpc_failed, reason}}
-          result -> result
-        end
+      case Mesh.Shards.ShardRouter.owner_node(shard, request.capability) do
+        {:ok, owner} ->
+          case :rpc.call(
+                 owner,
+                 Mesh.Actors.ActorOwner,
+                 :call,
+                 [
+                   request.id,
+                   request.payload,
+                   request.module,
+                   request.capability,
+                   request.init_arg
+                 ],
+                 5000
+               ) do
+            {:badrpc, reason} -> {:error, {:rpc_failed, reason}}
+            result -> result
+          end
 
-      {:error, :no_nodes} ->
-        {:error, {:no_nodes_for_capability, request.capability}}
+        {:error, :no_nodes} ->
+          {:error, {:no_nodes_for_capability, request.capability}}
+      end
     end
   end
 
@@ -43,29 +48,34 @@ defmodule Mesh.Actors.ActorSystem do
   """
   @spec cast(Mesh.Request.t()) :: :ok | {:error, term()}
   def cast(%Mesh.Request{} = request) do
-    shard = Mesh.Shards.ShardRouter.shard_for(request.id)
+    # Check if capability is rebalancing
+    if Mesh.Cluster.Rebalancing.rebalancing?(request.capability) do
+      {:error, {:rebalancing, request.capability}}
+    else
+      shard = Mesh.Shards.ShardRouter.shard_for(request.id)
 
-    case Mesh.Shards.ShardRouter.owner_node(shard, request.capability) do
-      {:ok, owner} ->
-        case :rpc.call(
-               owner,
-               Mesh.Actors.ActorOwner,
-               :cast,
-               [
-                 request.id,
-                 request.payload,
-                 request.module,
-                 request.capability,
-                 request.init_arg
-               ],
-               5000
-             ) do
-          {:badrpc, reason} -> {:error, {:rpc_failed, reason}}
-          :ok -> :ok
-        end
+      case Mesh.Shards.ShardRouter.owner_node(shard, request.capability) do
+        {:ok, owner} ->
+          case :rpc.call(
+                 owner,
+                 Mesh.Actors.ActorOwner,
+                 :cast,
+                 [
+                   request.id,
+                   request.payload,
+                   request.module,
+                   request.capability,
+                   request.init_arg
+                 ],
+                 5000
+               ) do
+            {:badrpc, reason} -> {:error, {:rpc_failed, reason}}
+            :ok -> :ok
+          end
 
-      {:error, :no_nodes} ->
-        {:error, {:no_nodes_for_capability, request.capability}}
+        {:error, :no_nodes} ->
+          {:error, {:no_nodes_for_capability, request.capability}}
+      end
     end
   end
 end
