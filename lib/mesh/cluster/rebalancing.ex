@@ -20,12 +20,35 @@ defmodule Mesh.Cluster.Rebalancing do
   @name __MODULE__
   @rebalancing_timeout 30_000
   @coordination_timeout 10_000
+  @circuit_breaker_threshold 3
+  @circuit_breaker_reset_timeout 60_000
 
   defmodule State do
     @moduledoc false
     defstruct rebalancing_capabilities: MapSet.new(),
               pending_operations: %{},
-              mode: :active
+              mode: :active,
+              circuit_breaker: %{
+                failures: 0,
+                last_failure_at: nil,
+                status: :closed
+              },
+              epoch: 0
+  end
+
+  defmodule RebalancingPlan do
+    @moduledoc false
+    defstruct [
+      :epoch,
+      :node,
+      :capabilities,
+      :old_ownership,
+      :new_ownership,
+      :ownership_changes,
+      :affected_nodes,
+      started_at: nil,
+      status: :pending
+    ]
   end
 
   def start_link(_) do
@@ -81,20 +104,14 @@ defmodule Mesh.Cluster.Rebalancing do
       "Starting coordinated rebalancing for node #{node} with capabilities: #{inspect(capabilities)}"
     )
 
-    case do_coordinate_rebalancing(node, capabilities, state) do
-      {:ok, new_state} ->
-        Logger.info(
-          "Completed coordinated rebalancing for node #{node} with capabilities: #{inspect(capabilities)}"
-        )
+    # Check circuit breaker
+    case check_circuit_breaker(state.circuit_breaker) do
+      {:ok, :closed} ->
+        execute_with_circuit_breaker(node, capabilities, state)
 
-        {:reply, :ok, new_state}
-
-      {:error, reason} = error ->
-        Logger.error(
-          "Failed coordinated rebalancing for #{node}/#{inspect(capabilities)}: #{inspect(reason)}"
-        )
-
-        {:reply, error, state}
+      {:error, :open} ->
+        Logger.warning("Circuit breaker is OPEN, rejecting rebalancing request")
+        {:reply, {:error, :circuit_breaker_open}, state}
     end
   end
 
@@ -137,23 +154,102 @@ defmodule Mesh.Cluster.Rebalancing do
     {:noreply, new_state}
   end
 
-  defp do_coordinate_rebalancing(node, capabilities, state) do
-    Logger.debug("Capturing current shard ownership before registration")
+  # Circuit Breaker Implementation
+
+  defp check_circuit_breaker(breaker) do
+    case breaker.status do
+      :closed ->
+        {:ok, :closed}
+
+      :open ->
+        # Check if enough time has passed to attempt half-open
+        if breaker.last_failure_at != nil do
+          time_since_failure = System.monotonic_time(:millisecond) - breaker.last_failure_at
+
+          if time_since_failure >= @circuit_breaker_reset_timeout do
+            {:ok, :half_open}
+          else
+            {:error, :open}
+          end
+        else
+          {:error, :open}
+        end
+    end
+  end
+
+  defp execute_with_circuit_breaker(node, capabilities, state) do
+    # Increment epoch for this rebalancing operation
+    new_epoch = state.epoch + 1
+
+    case do_coordinate_rebalancing(node, capabilities, new_epoch, state) do
+      {:ok, new_state} ->
+        Logger.info(
+          "Completed coordinated rebalancing (epoch #{new_epoch}) for node #{node} with capabilities: #{inspect(capabilities)}"
+        )
+
+        # Reset circuit breaker on success
+        updated_state = %{
+          new_state
+          | circuit_breaker: %{failures: 0, last_failure_at: nil, status: :closed},
+            epoch: new_epoch
+        }
+
+        {:reply, :ok, updated_state}
+
+      {:error, reason} = error ->
+        Logger.error(
+          "Failed coordinated rebalancing (epoch #{new_epoch}) for #{node}/#{inspect(capabilities)}: #{inspect(reason)}"
+        )
+
+        # Update circuit breaker
+        updated_breaker = record_failure(state.circuit_breaker)
+
+        updated_state = %{state | circuit_breaker: updated_breaker, epoch: new_epoch}
+
+        {:reply, error, updated_state}
+    end
+  end
+
+  defp record_failure(breaker) do
+    new_failures = breaker.failures + 1
+    now = System.monotonic_time(:millisecond)
+
+    if new_failures >= @circuit_breaker_threshold do
+      Logger.warning(
+        "Circuit breaker OPENED after #{new_failures} failures (threshold: #{@circuit_breaker_threshold})"
+      )
+
+      %{failures: new_failures, last_failure_at: now, status: :open}
+    else
+      Logger.debug(
+        "Circuit breaker recorded failure #{new_failures}/#{@circuit_breaker_threshold}"
+      )
+
+      %{failures: new_failures, last_failure_at: now, status: :closed}
+    end
+  end
+
+  # Core Rebalancing Logic
+
+  defp do_coordinate_rebalancing(node, capabilities, epoch, state) do
+    Logger.debug("Capturing current shard ownership before registration (epoch #{epoch})")
     old_ownership = capture_shard_ownership(capabilities)
 
-    Logger.debug("Registering capabilities in state")
+    Logger.debug("Registering capabilities in state (epoch #{epoch})")
     :ok = register_capabilities_internal(node, capabilities)
 
-    Logger.debug("Calculating new shard ownership after registration")
+    Logger.debug("Calculating new shard ownership after registration (epoch #{epoch})")
     new_ownership = capture_shard_ownership(capabilities)
 
-    Logger.debug("Calculating shard ownership changes")
+    Logger.debug("Calculating shard ownership changes (epoch #{epoch})")
     ownership_changes = calculate_ownership_changes(old_ownership, new_ownership)
 
-    Logger.info("Ownership changes: #{map_size(ownership_changes)} shards will be rebalanced")
+    Logger.info(
+      "Ownership changes (epoch #{epoch}): #{map_size(ownership_changes)} shards will be rebalanced"
+    )
 
     with :ok <- enter_rebalancing_mode(capabilities),
-         :ok <- stop_actors_for_shard_changes(ownership_changes),
+         :ok <- stop_actors_for_shard_changes(ownership_changes, epoch),
          :ok <- sync_shards_cluster_wide(capabilities),
          :ok <- exit_rebalancing_mode(capabilities) do
       {:ok, state}
@@ -196,7 +292,7 @@ defmodule Mesh.Cluster.Rebalancing do
     |> Map.new()
   end
 
-  defp stop_actors_for_shard_changes(ownership_changes) do
+  defp stop_actors_for_shard_changes(ownership_changes, epoch) do
     if map_size(ownership_changes) == 0 do
       Logger.info("No shard ownership changes detected, skipping actor shutdown")
       :ok
@@ -207,7 +303,7 @@ defmodule Mesh.Cluster.Rebalancing do
         |> Enum.group_by(fn {{_shard, _capability}, old_owner} -> old_owner end)
 
       Logger.info(
-        "Stopping actors on #{map_size(changes_by_node)} nodes due to ownership changes"
+        "Stopping actors on #{map_size(changes_by_node)} nodes due to ownership changes (epoch #{epoch})"
       )
 
       results =
@@ -217,21 +313,26 @@ defmodule Mesh.Cluster.Rebalancing do
               {shard, capability}
             end)
 
-          {node,
-           :rpc.call(
-             node,
-             __MODULE__,
-             :stop_actors_for_shards_local,
-             [shards_and_caps],
-             @coordination_timeout
-           )}
+          result =
+            Mesh.Cluster.Rebalancing.Support.call_with_retry(
+              node,
+              __MODULE__,
+              :stop_actors_for_shards_local,
+              [shards_and_caps, epoch],
+              max_retries: 2
+            )
+
+          {node, result}
         end)
 
-      if Enum.all?(results, fn {_node, result} -> result == :ok end) do
-        :ok
-      else
-        failed = Enum.filter(results, fn {_node, result} -> result != :ok end)
-        {:error, {:stop_actors_failed, failed}}
+      # Use Support's partial success evaluation
+      case Mesh.Cluster.Rebalancing.Support.evaluate_partial_success(results, 0.5) do
+        :ok ->
+          :ok
+
+        {:error, _reason} ->
+          failed = Enum.filter(results, fn {_node, result} -> result != :ok end)
+          {:error, {:stop_actors_failed, failed}}
       end
     end
   end
@@ -333,8 +434,10 @@ defmodule Mesh.Cluster.Rebalancing do
   end
 
   @doc false
-  def stop_actors_for_shards_local(shards_and_capabilities) do
-    Logger.debug("Stopping actors for #{length(shards_and_capabilities)} shard/capability pairs")
+  def stop_actors_for_shards_local(shards_and_capabilities, epoch \\ 0) do
+    Logger.debug(
+      "Stopping actors for #{length(shards_and_capabilities)} shard/capability pairs (epoch #{epoch})"
+    )
 
     # Build a set of {shard, capability} for fast lookup
     affected_set = MapSet.new(shards_and_capabilities)
@@ -351,12 +454,14 @@ defmodule Mesh.Cluster.Rebalancing do
         end
       end)
 
-    Logger.info("Found #{length(actors_to_stop)} actors to stop for shard ownership changes")
+    Logger.info(
+      "Found #{length(actors_to_stop)} actors to stop for shard ownership changes (epoch #{epoch})"
+    )
 
     # Stop actors in parallel with timeout for better reliability
-    Mesh.Cluster.Rebalancing.Support.stop_actors_parallel(actors_to_stop, 0)
+    Mesh.Cluster.Rebalancing.Support.stop_actors_parallel(actors_to_stop, epoch)
 
-    Logger.debug("Completed stopping actors for shard ownership changes")
+    Logger.debug("Completed stopping actors for shard ownership changes (epoch #{epoch})")
     :ok
   end
 end

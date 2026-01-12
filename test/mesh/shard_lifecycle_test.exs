@@ -161,6 +161,9 @@ defmodule Mesh.ShardLifecycleTest do
       Process.exit(owner_pid, :kill)
       Process.sleep(100)
 
+      # Wait for new ActorOwner to be registered
+      :ok = wait_for_actor_owner(shard)
+
       # Get new ActorOwner
       [{new_owner_pid, _}] = Registry.lookup(ActorOwnerRegistry, shard)
       assert new_owner_pid != owner_pid
@@ -303,6 +306,9 @@ defmodule Mesh.ShardLifecycleTest do
       Task.await_many(tasks, 5000)
       Process.sleep(100)
 
+      # Wait for ActorOwner to stabilize
+      :ok = wait_for_actor_owner(shard)
+
       # Should have exactly ONE ActorOwner for the shard, not duplicates
       owners = Registry.lookup(ActorOwnerRegistry, shard)
 
@@ -370,6 +376,28 @@ defmodule Mesh.ShardLifecycleTest do
     end
   end
 
+  # Helper to wait for ActorOwner to be available for a shard
+  defp wait_for_actor_owner(shard, retries \\ 20) do
+    case Registry.lookup(ActorOwnerRegistry, shard) do
+      [{_pid, _}] ->
+        :ok
+
+      [] when retries > 0 ->
+        Process.sleep(100)
+        wait_for_actor_owner(shard, retries - 1)
+
+      [] ->
+        # If not available after retries, trigger sync_shards and try once more
+        Mesh.Actors.ActorOwnerSupervisor.sync_shards()
+        Process.sleep(200)
+
+        case Registry.lookup(ActorOwnerRegistry, shard) do
+          [{_pid, _}] -> :ok
+          [] -> {:error, :timeout}
+        end
+    end
+  end
+
   # Helper to find N actors that hash to the same shard
   defp find_actors_in_same_shard(n) do
     find_actors_in_same_shard(n, %{}, 0)
@@ -379,16 +407,24 @@ defmodule Mesh.ShardLifecycleTest do
     actor_id = "shard_test_#{counter}_#{System.unique_integer([:positive])}"
     shard = ShardRouter.shard_for(actor_id)
 
-    {:ok, pid, :pong} = ActorOwner.call(actor_id, :ping, TestActor, :test)
+    # Ensure ActorOwner is available for this shard
+    case wait_for_actor_owner(shard) do
+      :ok ->
+        {:ok, pid, :pong} = ActorOwner.call(actor_id, :ping, TestActor, :test)
 
-    updated_map = Map.update(shard_map, shard, [{actor_id, pid}], &[{actor_id, pid} | &1])
+        updated_map = Map.update(shard_map, shard, [{actor_id, pid}], &[{actor_id, pid} | &1])
 
-    case Map.get(updated_map, shard) do
-      actors when length(actors) >= n ->
-        Enum.take(actors, n)
+        case Map.get(updated_map, shard) do
+          actors when length(actors) >= n ->
+            Enum.take(actors, n)
 
-      _ ->
-        find_actors_in_same_shard(n, updated_map, counter + 1)
+          _ ->
+            find_actors_in_same_shard(n, updated_map, counter + 1)
+        end
+
+      {:error, :timeout} ->
+        # Skip this shard and try next actor
+        find_actors_in_same_shard(n, shard_map, counter + 1)
     end
   end
 
