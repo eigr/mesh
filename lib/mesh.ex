@@ -3,14 +3,14 @@ defmodule Mesh do
   Mesh - A distributed actor system with capability-based routing.
 
   Mesh provides a simple, unified API for working with distributed actors
-  across an Erlang/Elixir cluster. It uses consistent hashing (hash ring)
-  to deterministically distribute actors across nodes based on capabilities.
+  across an Erlang/Elixir cluster. Actors are distributed and routed using shards,
+  which are computed from the actor ID and mapped to nodes based on capabilities.
 
   ## Architecture
 
   Mesh uses a three-layer architecture:
 
-  1. Hash Ring: Computes shard (0..4095) from actor ID using `:erlang.phash2/2`
+  1. Sharding: Computes a shard (0..4095) from the actor ID using `:erlang.phash2/2`
   2. Capability Routing: Determines which nodes support a given capability
   3. Actor Placement: Routes actors to owner nodes via RPC
 
@@ -77,7 +77,7 @@ defmodule Mesh do
   This is the primary API for making synchronous calls to processes in the mesh.
   The function:
 
-  1. Computes the shard from the actor ID using the hash ring
+  1. Computes the shard from the actor ID
   2. Determines which node owns that shard for the given capability
   3. Makes an RPC call to that node's ActorOwner
   4. Lazily creates the process if it doesn't exist (using `init_arg` if provided)
