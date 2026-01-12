@@ -3,7 +3,7 @@ defmodule Mesh.ShardLifecycleTest do
   Tests for shard lifecycle: monitor recovery, orphaned actor cleanup,
   and race condition handling during shard synchronization.
   """
-  use ExUnit.Case
+  use ExUnit.Case, async: false
 
   alias Mesh.Actors.{ActorOwner, ActorTable}
   alias Mesh.Shards.ShardRouter
@@ -61,6 +61,7 @@ defmodule Mesh.ShardLifecycleTest do
   end
 
   setup do
+    Mesh.Cluster.Capabilities.reset_state()
     Mesh.register_capabilities([:test])
     Process.sleep(50)
     :ok

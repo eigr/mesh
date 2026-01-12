@@ -22,6 +22,13 @@ defmodule Mesh.Cluster.Rebalancing.Reconciler do
     GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
   end
 
+  @doc """
+  Triggers an immediate reconciliation. Useful for testing or forcing cleanup.
+  """
+  def reconcile_now do
+    perform_reconciliation()
+  end
+
   @impl true
   def init(_) do
     schedule_reconciliation()

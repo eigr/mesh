@@ -84,14 +84,16 @@ defmodule Mesh.Cluster.Rebalancing do
     GenServer.call(@name, {:rebalancing?, capability})
   end
 
+  def reset_state do
+    GenServer.call(@name, :reset_state)
+  end
+
   @doc """
   Returns current rebalancing mode: `:active` or `:rebalancing`
   """
   def mode do
     GenServer.call(@name, :mode)
   end
-
-  # Server Callbacks
 
   @impl true
   def init(_) do
@@ -104,9 +106,12 @@ defmodule Mesh.Cluster.Rebalancing do
       "Starting coordinated rebalancing for node #{node} with capabilities: #{inspect(capabilities)}"
     )
 
-    # Check circuit breaker
     case check_circuit_breaker(state.circuit_breaker) do
       {:ok, :closed} ->
+        execute_with_circuit_breaker(node, capabilities, state)
+
+      {:ok, :half_open} ->
+        Logger.info("Circuit breaker is HALF-OPEN, attempting recovery")
         execute_with_circuit_breaker(node, capabilities, state)
 
       {:error, :open} ->
@@ -121,7 +126,10 @@ defmodule Mesh.Cluster.Rebalancing do
     {:reply, is_rebalancing, state}
   end
 
-  @impl true
+  def handle_call(:reset_state, _from, _state) do
+    {:reply, :ok, %Mesh.Cluster.Rebalancing.State{}}
+  end
+
   def handle_call(:mode, _from, state) do
     {:reply, state.mode, state}
   end
@@ -154,15 +162,12 @@ defmodule Mesh.Cluster.Rebalancing do
     {:noreply, new_state}
   end
 
-  # Circuit Breaker Implementation
-
   defp check_circuit_breaker(breaker) do
     case breaker.status do
       :closed ->
         {:ok, :closed}
 
       :open ->
-        # Check if enough time has passed to attempt half-open
         if breaker.last_failure_at != nil do
           time_since_failure = System.monotonic_time(:millisecond) - breaker.last_failure_at
 
@@ -178,7 +183,6 @@ defmodule Mesh.Cluster.Rebalancing do
   end
 
   defp execute_with_circuit_breaker(node, capabilities, state) do
-    # Increment epoch for this rebalancing operation
     new_epoch = state.epoch + 1
 
     case do_coordinate_rebalancing(node, capabilities, new_epoch, state) do
@@ -187,7 +191,6 @@ defmodule Mesh.Cluster.Rebalancing do
           "Completed coordinated rebalancing (epoch #{new_epoch}) for node #{node} with capabilities: #{inspect(capabilities)}"
         )
 
-        # Reset circuit breaker on success
         updated_state = %{
           new_state
           | circuit_breaker: %{failures: 0, last_failure_at: nil, status: :closed},
@@ -201,7 +204,6 @@ defmodule Mesh.Cluster.Rebalancing do
           "Failed coordinated rebalancing (epoch #{new_epoch}) for #{node}/#{inspect(capabilities)}: #{inspect(reason)}"
         )
 
-        # Update circuit breaker
         updated_breaker = record_failure(state.circuit_breaker)
 
         updated_state = %{state | circuit_breaker: updated_breaker, epoch: new_epoch}
@@ -229,8 +231,6 @@ defmodule Mesh.Cluster.Rebalancing do
     end
   end
 
-  # Core Rebalancing Logic
-
   defp do_coordinate_rebalancing(node, capabilities, epoch, state) do
     Logger.debug("Capturing current shard ownership before registration (epoch #{epoch})")
     old_ownership = capture_shard_ownership(capabilities)
@@ -257,7 +257,6 @@ defmodule Mesh.Cluster.Rebalancing do
   end
 
   defp register_capabilities_internal(node, capabilities) do
-    # Call the Capabilities module directly without triggering another rebalancing
     GenServer.call(
       Mesh.Cluster.Capabilities,
       {:register, node, MapSet.new(capabilities)}
@@ -282,11 +281,9 @@ defmodule Mesh.Cluster.Rebalancing do
   end
 
   defp calculate_ownership_changes(old_ownership, new_ownership) do
-    # Find shards where ownership changed (old_owner != new_owner)
     old_ownership
     |> Enum.filter(fn {{_shard, _capability} = key, old_owner} ->
       new_owner = Map.get(new_ownership, key)
-      # Ownership changed if: old existed and new is different, or old didn't exist
       old_owner != nil and new_owner != nil and old_owner != new_owner
     end)
     |> Map.new()
@@ -325,7 +322,6 @@ defmodule Mesh.Cluster.Rebalancing do
           {node, result}
         end)
 
-      # Use Support's partial success evaluation
       case Mesh.Cluster.Rebalancing.Support.evaluate_partial_success(results, 0.5) do
         :ok ->
           :ok
@@ -415,7 +411,6 @@ defmodule Mesh.Cluster.Rebalancing do
     |> Enum.flat_map(&Mesh.Cluster.Capabilities.nodes_for/1)
     |> Enum.uniq()
     |> Enum.filter(fn node ->
-      # Only include nodes that are actually connected or is the current node
       node == node() or Node.ping(node) == :pong
     end)
     |> Enum.sort()
@@ -435,11 +430,12 @@ defmodule Mesh.Cluster.Rebalancing do
 
   @doc false
   def stop_actors_for_shards_local(shards_and_capabilities, epoch \\ 0) do
+    Logger.info("stop_actors_for_shards_local called with epoch #{epoch}")
+
     Logger.debug(
       "Stopping actors for #{length(shards_and_capabilities)} shard/capability pairs (epoch #{epoch})"
     )
 
-    # Build a set of {shard, capability} for fast lookup
     affected_set = MapSet.new(shards_and_capabilities)
 
     # Get all actors and filter by those in affected shards
@@ -458,7 +454,6 @@ defmodule Mesh.Cluster.Rebalancing do
       "Found #{length(actors_to_stop)} actors to stop for shard ownership changes (epoch #{epoch})"
     )
 
-    # Stop actors in parallel with timeout for better reliability
     Mesh.Cluster.Rebalancing.Support.stop_actors_parallel(actors_to_stop, epoch)
 
     Logger.debug("Completed stopping actors for shard ownership changes (epoch #{epoch})")

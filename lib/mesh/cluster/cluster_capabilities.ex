@@ -30,6 +30,10 @@ defmodule Mesh.Cluster.Capabilities do
     end
   end
 
+  def reset_state do
+    GenServer.call(@name, :reset_state)
+  end
+
   def nodes_for(actor_type), do: GenServer.call(@name, {:nodes_for, actor_type})
 
   @impl true
@@ -49,6 +53,10 @@ defmodule Mesh.Cluster.Capabilities do
   def handle_call({:register, node, capabilities}, _from, state) do
     new_state = register_in_state(state, node, capabilities)
     {:reply, :ok, new_state}
+  end
+
+  def handle_call(:reset_state, _from, _state) do
+    {:reply, :ok, %{node_capabilities: %{node() => MapSet.new()}}}
   end
 
   @impl true

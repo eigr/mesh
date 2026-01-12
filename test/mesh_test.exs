@@ -3,8 +3,9 @@ defmodule MeshTest do
   doctest Mesh
 
   setup do
+    if Process.whereis(Mesh.Cluster.Rebalancing), do: Mesh.Cluster.Rebalancing.reset_state()
+    if Process.whereis(Mesh.Cluster.Capabilities), do: Mesh.Cluster.Capabilities.reset_state()
     Mesh.register_capabilities([:test])
-    Process.sleep(100)
     :ok
   end
 

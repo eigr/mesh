@@ -22,7 +22,6 @@ defmodule Mesh.Cluster.Rebalancing.Support do
   end
 
   defp do_call_with_retry(node, module, function, args, retries_left, attempt) do
-    # Adaptive timeout increases with each retry
     timeout = @coordination_timeout * attempt
 
     case :rpc.call(node, module, function, args, timeout) do
@@ -89,7 +88,6 @@ defmodule Mesh.Cluster.Rebalancing.Support do
 
     results = Task.yield_many(tasks, 5_000)
 
-    # Force kill stragglers
     Enum.each(results, fn {task, result} ->
       case result do
         nil -> Task.shutdown(task, :brutal_kill)

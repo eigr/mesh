@@ -1,11 +1,8 @@
-Code.require_file(Path.expand("../support/node_helper.ex", __DIR__))
-Code.require_file(Path.expand("../support/rebalancing_test_actor.ex", __DIR__))
-
 defmodule Mesh.ShardRebalancingTest do
   use ExUnit.Case, async: false
 
   alias Mesh.Shards.ShardRouter
-  alias Mesh.ShardRebalancingTest.TestActor
+  alias Mesh.TestActor
 
   @tag :rebalancing
   test "rebalancing clears actor entries on the previous owner" do
