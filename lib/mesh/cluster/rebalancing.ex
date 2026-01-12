@@ -1,15 +1,15 @@
 defmodule Mesh.Cluster.Rebalancing do
   @moduledoc """
   Coordinates rebalancing when capabilities are registered or removed.
-  
+
   When a node registers capabilities, this module ensures a coordinated
   rebalancing process across all nodes with the same capabilities:
-  
+
   1. Enter rebalancing mode (pause new actor creation)
   2. Gracefully stop actors for affected capabilities
   3. Synchronize shards across all participating nodes
   4. Exit rebalancing mode (resume normal operation)
-  
+
   This prevents race conditions and ensures consistent actor placement
   during topology changes.
   """
@@ -34,7 +34,7 @@ defmodule Mesh.Cluster.Rebalancing do
 
   @doc """
   Initiates coordinated rebalancing for the given capabilities.
-  
+
   This function will:
   1. Calculate current shard ownership (before registration)
   2. Register capabilities (changes topology)
@@ -43,7 +43,7 @@ defmodule Mesh.Cluster.Rebalancing do
   5. Stop only actors on shards that changed ownership
   6. Sync shards
   7. Resume normal operation
-  
+
   Returns `:ok` or `{:error, reason}`
   """
   def coordinate_rebalancing(node, capabilities) when is_list(capabilities) do
@@ -77,11 +77,16 @@ defmodule Mesh.Cluster.Rebalancing do
 
   @impl true
   def handle_call({:coordinate_rebalancing, node, capabilities}, _from, state) do
-    Logger.info("Starting coordinated rebalancing for node #{node} with capabilities: #{inspect(capabilities)}")
+    Logger.info(
+      "Starting coordinated rebalancing for node #{node} with capabilities: #{inspect(capabilities)}"
+    )
 
     case do_coordinate_rebalancing(node, capabilities, state) do
       {:ok, new_state} ->
-        Logger.info("Completed coordinated rebalancing for node #{node} with capabilities: #{inspect(capabilities)}")
+        Logger.info(
+          "Completed coordinated rebalancing for node #{node} with capabilities: #{inspect(capabilities)}"
+        )
+
         {:reply, :ok, new_state}
 
       {:error, reason} = error ->
@@ -132,28 +137,21 @@ defmodule Mesh.Cluster.Rebalancing do
     {:noreply, new_state}
   end
 
-  # Private Functions
-
   defp do_coordinate_rebalancing(node, capabilities, state) do
-    # Step 1: Capture current shard ownership BEFORE registration
-    Logger.debug("Step 1: Capturing current shard ownership before registration")
+    Logger.debug("Capturing current shard ownership before registration")
     old_ownership = capture_shard_ownership(capabilities)
 
-    # Step 2: Register the capabilities (this changes topology)
-    Logger.debug("Step 2: Registering capabilities in state")
+    Logger.debug("Registering capabilities in state")
     :ok = register_capabilities_internal(node, capabilities)
 
-    # Step 3: Calculate new shard ownership AFTER registration
-    Logger.debug("Step 3: Calculating new shard ownership after registration")
+    Logger.debug("Calculating new shard ownership after registration")
     new_ownership = capture_shard_ownership(capabilities)
 
-    # Step 4: Calculate which shards changed ownership
-    Logger.debug("Step 4: Calculating shard ownership changes")
+    Logger.debug("Calculating shard ownership changes")
     ownership_changes = calculate_ownership_changes(old_ownership, new_ownership)
 
     Logger.info("Ownership changes: #{map_size(ownership_changes)} shards will be rebalanced")
 
-    # Step 5: Enter rebalancing mode
     with :ok <- enter_rebalancing_mode(capabilities),
          :ok <- stop_actors_for_shard_changes(ownership_changes),
          :ok <- sync_shards_cluster_wide(capabilities),
@@ -208,7 +206,9 @@ defmodule Mesh.Cluster.Rebalancing do
         ownership_changes
         |> Enum.group_by(fn {{_shard, _capability}, old_owner} -> old_owner end)
 
-      Logger.info("Stopping actors on #{map_size(changes_by_node)} nodes due to ownership changes")
+      Logger.info(
+        "Stopping actors on #{map_size(changes_by_node)} nodes due to ownership changes"
+      )
 
       results =
         Enum.map(changes_by_node, fn {node, changes} ->
@@ -320,8 +320,6 @@ defmodule Mesh.Cluster.Rebalancing do
     |> Enum.sort()
   end
 
-  # Called via RPC on each node
-
   @doc false
   def enter_rebalancing_mode_local(capabilities) do
     GenServer.cast(@name, {:enter_rebalancing_mode, capabilities})
@@ -336,9 +334,7 @@ defmodule Mesh.Cluster.Rebalancing do
 
   @doc false
   def stop_actors_for_shards_local(shards_and_capabilities) do
-    Logger.debug(
-      "Stopping actors for #{length(shards_and_capabilities)} shard/capability pairs"
-    )
+    Logger.debug("Stopping actors for #{length(shards_and_capabilities)} shard/capability pairs")
 
     # Build a set of {shard, capability} for fast lookup
     affected_set = MapSet.new(shards_and_capabilities)
@@ -355,11 +351,8 @@ defmodule Mesh.Cluster.Rebalancing do
         end
       end)
 
-    Logger.info(
-      "Found #{length(actors_to_stop)} actors to stop for shard ownership changes"
-    )
+    Logger.info("Found #{length(actors_to_stop)} actors to stop for shard ownership changes")
 
-    # Gracefully stop each actor
     Enum.each(actors_to_stop, fn {{capability, module, actor_id} = actor_key, pid, _node} ->
       shard = Mesh.Shards.ShardRouter.shard_for(actor_id)
 

@@ -1,7 +1,7 @@
 defmodule Mesh.MixProject do
   use Mix.Project
 
-  @source_url "https://github.com/eigr-labs/mesh"
+  @source_url "https://github.com/eigr/mesh"
   @version "0.1.3"
 
   def project do

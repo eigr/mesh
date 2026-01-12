@@ -82,7 +82,14 @@ end
 
 ## Register Capabilities
 
-Tell Mesh what types of processes this node can handle:
+Capabilities define what types of processes this node can handle. By registering `:game`, we're telling Mesh that this node is responsible for handling game-related processes.
+
+In a multi-node cluster, you might have:
+- Game nodes with `:game` capability
+- Chat nodes with `:chat` capability  
+- Payment nodes with `:payment` capability
+
+Mesh uses these capabilities to route process requests to the appropriate nodes.
 
 ```elixir
 Mesh.register_capabilities([:game])

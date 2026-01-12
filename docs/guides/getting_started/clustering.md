@@ -38,11 +38,18 @@ end
 
 ## Capabilities
 
-Capabilities identify what types of processes a node can handle. Examples:
+Capabilities are labels that define what types of processes a node is responsible for handling. They enable workload isolation and allow you to create specialized node types in your cluster.
 
-- `:game` - Game-related processes
-- `:chat` - Chat/messaging processes
-- `:payment` - Payment processing processes
+Think of capabilities as tags that describe a node's role. For example:
+
+- `:game` - Game-related processes (game servers, matchmaking)
+- `:chat` - Chat/messaging processes (rooms, conversations)
+- `:payment` - Payment processing (transactions, billing)
+
+When you invoke a process with a specific capability, Mesh automatically routes it to a node that has registered that capability. This allows you to:
+- Isolate workloads (separate game logic from payment processing)
+- Scale specific capabilities independently (add more game nodes without affecting chat)
+- Use specialized hardware for different workload types
 
 ### Register Capabilities
 

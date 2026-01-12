@@ -3,7 +3,6 @@
 
 IO.puts("\n=== Understanding Rebalancing: Why Only Some Actors Move ===\n")
 
-# Simular a configuração
 shard_count = 4096
 total_shards = shard_count
 
@@ -11,14 +10,11 @@ IO.puts("Configuration:")
 IO.puts("  Total shards: #{total_shards}")
 IO.puts("  Hash strategy: EventualConsistency (modulo-based)\n")
 
-# Criar 20 actor IDs do teste
 actor_ids = for i <- 1..20, do: "game_#{i}"
 
-IO.puts("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-IO.puts("STEP 1: Mapping actors to shards")
-IO.puts("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+IO.puts("\nSTEP 1: Mapping actors to shards")
 
-# Mapear cada ator para seu shard (isso NUNCA muda!)
+# Map each actor to their shard (this NEVER changes!)
 actor_to_shard = 
   for actor_id <- actor_ids do
     shard = :erlang.phash2(actor_id, total_shards)
@@ -30,18 +26,14 @@ Enum.each(actor_to_shard, fn {actor_id, shard} ->
   IO.puts("  #{String.pad_trailing(actor_id, 10)} -> shard #{shard}")
 end)
 
-IO.puts("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-IO.puts("STEP 2: Before adding node3 (1 node with :game capability)")
-IO.puts("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+IO.puts("\nSTEP 2: Before adding node3 (1 node with :game capability)")
 
 nodes_before = ["game_node_1@127.0.0.1"] |> Enum.sort()
 IO.puts("Nodes: #{inspect(nodes_before)}")
 IO.puts("Node count: #{length(nodes_before)}\n")
 
-# Calcular ownership ANTES (1 node)
 ownership_before =
   Enum.map(actor_to_shard, fn {actor_id, shard} ->
-    # EventualConsistency: rem(shard, node_count)
     node_idx = rem(shard, length(nodes_before))
     owner = Enum.at(nodes_before, node_idx)
     {actor_id, shard, owner}
@@ -60,19 +52,14 @@ Enum.each(unique_shards_before, fn {shard, owner} ->
 end)
 
 IO.puts("\nAll actors on: #{Enum.at(nodes_before, 0)}")
-
-IO.puts("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-IO.puts("STEP 3: After adding node3 (2 nodes with :game capability)")
-IO.puts("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+IO.puts("\nSTEP 3: After adding node3 (2 nodes with :game capability)")
 
 nodes_after = ["game_node2_1@127.0.0.1", "game_node_1@127.0.0.1"] |> Enum.sort()
 IO.puts("Nodes: #{inspect(nodes_after)}")
 IO.puts("Node count: #{length(nodes_after)}\n")
 
-# Calcular ownership DEPOIS (2 nodes)
 ownership_after =
   Enum.map(actor_to_shard, fn {actor_id, shard} ->
-    # EventualConsistency: rem(shard, node_count)
     node_idx = rem(shard, length(nodes_after))
     owner = Enum.at(nodes_after, node_idx)
     {actor_id, shard, owner}
@@ -97,11 +84,9 @@ IO.puts("\nDistribution:")
 IO.puts("  #{Enum.at(nodes_after, 0)}: #{node1_count} actors")
 IO.puts("  #{Enum.at(nodes_after, 1)}: #{node2_count} actors")
 
-IO.puts("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-IO.puts("STEP 4: Calculating ownership changes (what rebalancing does)")
-IO.puts("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+IO.puts("\nSTEP 4: Calculating ownership changes (what rebalancing does)")
 
-# Comparar ownership
+# Compare ownership
 changes = 
   Enum.zip(ownership_before, ownership_after)
   |> Enum.filter(fn {{_, _, owner_before}, {_, _, owner_after}} ->
@@ -144,7 +129,7 @@ IO.puts("  Actors that changed: #{length(changes)} (#{Float.round(length(changes
 IO.puts("  Actors that stayed:  #{stayed} (#{Float.round(stayed / 20 * 100, 1)}%)")
 IO.puts("")
 
-# Análise de shards
+# Shard analysis
 shards_used = Enum.map(actor_to_shard, fn {_, shard} -> shard end) |> Enum.uniq()
 shards_changed = 
   Enum.count(shards_used, fn shard ->
@@ -159,7 +144,6 @@ IO.puts("  Shards that changed: #{shards_changed} (#{Float.round(shards_changed 
 IO.puts("  Shards that stayed:  #{length(shards_used) - shards_changed} (#{Float.round((length(shards_used) - shards_changed) / length(shards_used) * 100, 1)}%)")
 IO.puts("")
 
-IO.puts("✅ This is CORRECT behavior!")
 IO.puts("   The rebalancing system correctly identifies which shards")
 IO.puts("   changed ownership and only stops actors on those shards.")
 IO.puts("")

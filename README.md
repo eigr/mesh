@@ -2,11 +2,11 @@
 
 Capability-based distributed process management for Elixir.
 
-Mesh distributes GenServer processes across BEAM nodes using hashing and capability-based routing. Processes are lazily activated on-demand and automatically placed on the correct node based on their ID and capability type.
+Mesh distributes GenServer processes across BEAM nodes using shard-based routing and capabilities. Processes are lazily activated on-demand and automatically placed on the correct node based on their ID and capability type.
 
 ## What is Mesh?
 
-Mesh solves the distributed process placement problem. Instead of manually managing where processes run, you define capabilities (like `:game`, `:chat`, `:payment`) and let Mesh handle the routing using a hash ring with 4096 shards.
+Mesh solves the distributed process placement problem. Instead of manually managing where processes run, you define capabilities (like `:game`, `:chat`, `:payment`) and let Mesh handle the routing using shards distributed across your cluster.
 
 Key characteristics:
 
@@ -20,24 +20,33 @@ Use cases: game servers with regional routing, multi-tenant systems with workloa
 
 ## Core Concepts
 
-Capabilities are labels that identify what type of processes a node handles. Examples: `:game`, `:chat`, `:payment`. Nodes register supported capabilities, and Mesh routes requests accordingly.
+### Capabilities
+
+Capabilities are labels that define what types of processes a node can handle. Think of them as tags that describe a node's responsibility in your cluster.
+
+For example:
+- `:game` - This node handles game-related processes
+- `:chat` - This node handles chat/messaging processes  
+- `:payment` - This node handles payment processing
+
+Nodes register the capabilities they support, and Mesh automatically routes process requests to nodes with matching capabilities. This enables workload isolation and specialized node types.
 
 ```elixir
 Mesh.register_capabilities([:game, :chat])
 ```
 
-The hash ring uses hashing with 4096 shards to distribute processes:
+Mesh uses shards to distribute processes across nodes:
 
 ```
-process_id → hash(process_id) → shard (0..4095) → owner_node
+process_id → shard → owner_node
 ```
 
-Same ID always maps to the same shard. Shards are distributed across nodes using the configured hash strategy (default: modulo-based routing).
+Same ID always maps to the same shard. Shards are automatically distributed across nodes supporting the required capability. When cluster topology changes (nodes joining/leaving), shards are rebalanced accordingly.
 
->__NOTE__: The default hash strategy (`EventualConsistency`) uses **eventual consistency** for process placement. Shards are used purely for routing decisions - they do not provide state guarantees or transactions. Each process manages its own state independently. During network partitions or topology changes, the same process ID may temporarily exist on multiple nodes until the system converges. You can implement custom hash strategies with different consistency guarantees - see [Configuration](docs/guides/getting_started/configuration.md).
+>__NOTE__: The default shard strategy (`EventualConsistency`) uses **eventual consistency** for process placement. Shards are used purely for routing decisions - they do not provide state guarantees or transactions. Each process manages its own state independently. During network partitions, the same process ID may temporarily exist on multiple nodes until the system converges. When topology changes occur (nodes joining/leaving), rebalancing stops conflicting processes so they can be migrated to the correct node on their next invocation. You can implement custom shard strategies with different consistency guarantees - see [Configuration](docs/guides/getting_started/configuration.md).
 
 Processes are created lazily on first invocation. When you call a non-existent process, Mesh:
-1. Determines target node via hash ring
+1. Determines target node via shard routing
 2. Starts the process on that node
 3. Caches the PID for fast subsequent lookups
 4. Forwards the message and returns the response
@@ -192,7 +201,7 @@ elixir --name bench@127.0.0.1 --cookie mesh -S mix run scripts/benchmark_multino
 ## Documentation
 
 - [Quickstart Guide](docs/guides/getting_started/quickstart.livemd) - Get started in 5 minutes
-- [Configuration](docs/guides/getting_started/configuration.md) - Configure hash strategies and sharding
+- [Configuration](docs/guides/getting_started/configuration.md) - Configure shard strategies and distribution
 - [Clustering](docs/guides/getting_started/clustering.md) - Multi-node setup
 - [Sharding](docs/guides/advanced/sharding.md) - Process distribution internals
 - [Implementing Processes](docs/guides/advanced/processes.md) - Building stateful actors
