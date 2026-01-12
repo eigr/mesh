@@ -1,5 +1,15 @@
 defmodule CustomActorTest do
   use ExUnit.Case
+  use ExUnit.Case, async: false
+
+  setup_all do
+    unless Process.whereis(Mesh.Cluster.Rebalancing) do
+      Mesh.Cluster.Rebalancing.start_link([])
+      Process.sleep(200)
+    end
+
+    :ok
+  end
 
   defmodule TestActor do
     @moduledoc "Test actor for validation"

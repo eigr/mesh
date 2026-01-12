@@ -1,5 +1,24 @@
 defmodule Mesh.Cluster.CapabilitiesTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: false
+
+  setup_all do
+    if Process.whereis(Mesh.Cluster.Capabilities),
+      do: Process.exit(Process.whereis(Mesh.Cluster.Capabilities), :kill)
+
+    if Process.whereis(Mesh.Cluster.Rebalancing),
+      do: Process.exit(Process.whereis(Mesh.Cluster.Rebalancing), :kill)
+
+    Process.sleep(100)
+    Mesh.Cluster.Capabilities.start_link([])
+    Mesh.Cluster.Rebalancing.start_link([])
+    Process.sleep(200)
+    :ok
+  end
+
+  setup do
+    Mesh.Cluster.Capabilities.reset_state()
+    :ok
+  end
 
   alias Mesh.Cluster.Capabilities
 

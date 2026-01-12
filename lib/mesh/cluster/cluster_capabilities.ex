@@ -16,9 +16,22 @@ defmodule Mesh.Cluster.Capabilities do
   end
 
   def register_capabilities(node \\ node(), capabilities) when is_list(capabilities) do
-    :ok = GenServer.call(@name, {:register, node, MapSet.new(capabilities)})
-    Mesh.Actors.ActorOwnerSupervisor.sync_shards()
-    propagate_capabilities(node, capabilities)
+    # Coordinate rebalancing for these capabilities across all nodes
+    # This will handle the registration internally
+    case Mesh.Cluster.Rebalancing.coordinate_rebalancing(node, capabilities) do
+      :ok ->
+        Logger.info("Capability rebalancing completed for #{node}: #{inspect(capabilities)}")
+        propagate_capabilities(node, capabilities)
+        :ok
+
+      {:error, reason} ->
+        Logger.error("Capability rebalancing failed for #{node}: #{inspect(reason)}")
+        {:error, reason}
+    end
+  end
+
+  def reset_state do
+    GenServer.call(@name, :reset_state)
   end
 
   def nodes_for(actor_type), do: GenServer.call(@name, {:nodes_for, actor_type})
@@ -40,6 +53,10 @@ defmodule Mesh.Cluster.Capabilities do
   def handle_call({:register, node, capabilities}, _from, state) do
     new_state = register_in_state(state, node, capabilities)
     {:reply, :ok, new_state}
+  end
+
+  def handle_call(:reset_state, _from, _state) do
+    {:reply, :ok, %{node_capabilities: %{node() => MapSet.new()}}}
   end
 
   @impl true

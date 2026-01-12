@@ -1,5 +1,10 @@
 defmodule Mesh.StressTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: false
+
+  setup do
+    Mesh.Cluster.Capabilities.reset_state()
+    :ok
+  end
 
   @moduletag :stress
 

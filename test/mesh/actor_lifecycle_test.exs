@@ -2,7 +2,7 @@ defmodule Mesh.ActorLifecycleTest do
   @moduledoc """
   Tests for actor lifecycle scenarios including voluntary shutdown.
   """
-  use ExUnit.Case
+  use ExUnit.Case, async: false
 
   defmodule SelfShutdownActor do
     @moduledoc """
@@ -51,6 +51,7 @@ defmodule Mesh.ActorLifecycleTest do
   end
 
   setup do
+    Mesh.Cluster.Capabilities.reset_state()
     Mesh.Cluster.Capabilities.register_capabilities([:lifecycle_test])
     Mesh.Actors.ActorOwnerSupervisor.sync_shards()
     :ok
