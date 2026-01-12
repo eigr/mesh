@@ -353,20 +353,8 @@ defmodule Mesh.Cluster.Rebalancing do
 
     Logger.info("Found #{length(actors_to_stop)} actors to stop for shard ownership changes")
 
-    Enum.each(actors_to_stop, fn {{capability, module, actor_id} = actor_key, pid, _node} ->
-      shard = Mesh.Shards.ShardRouter.shard_for(actor_id)
-
-      Logger.debug(
-        "Stopping actor: #{module}.#{actor_id} (shard: #{shard}, capability: #{capability})"
-      )
-
-      if Process.alive?(pid) do
-        Process.exit(pid, :shutdown)
-        Process.sleep(10)
-      end
-
-      Mesh.Actors.ActorTable.delete(actor_key)
-    end)
+    # Stop actors in parallel with timeout for better reliability
+    Mesh.Cluster.Rebalancing.Support.stop_actors_parallel(actors_to_stop, 0)
 
     Logger.debug("Completed stopping actors for shard ownership changes")
     :ok

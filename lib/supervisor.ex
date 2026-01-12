@@ -63,6 +63,7 @@ defmodule Mesh.Supervisor do
       {Registry, keys: :unique, name: ActorOwnerRegistry},
       Mesh.Cluster.Capabilities,
       Mesh.Cluster.Rebalancing,
+      Mesh.Cluster.Rebalancing.Reconciler,
       Mesh.Cluster.Membership,
       {PartitionSupervisor,
        child_spec: Mesh.Actors.ActorSupervisor, name: Mesh.Actors.ActorSupervisor},
